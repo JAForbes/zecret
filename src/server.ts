@@ -6,19 +6,24 @@ import { State } from "./types";
 import {
 	decryptWithBufferPrivateKey,
 	decryptWithGithubPrivateKey,
+	decryptWithSecret,
 	encryptWithBufferPublicKey,
 	encryptWithGithubPublicKey,
+	encryptWithSecret,
+	parseJwt,
 } from "./util";
 import { LoginCommand } from "./server-login";
 import { InitializeStoreCommand } from "./server-initialize";
 import { state } from "./server-state";
 import { WhoAmICommand } from "./server-whoami";
 import RefreshTokenCommand from "./server-token-refresh";
+import UpsertSecretsCommand from "./server-upsert-secrets";
 
 export default async function server(argv: any & { _: string[] }) {
 	const initializeStoreRes = await InitializeStoreCommand({
-		tag: "InitializeStore",
+		tag: "InitializeStoreCommand",
 		value: {
+			owners: ["gh:JAForbes"],
 			key_pair: {
 				private_key: await fs.readFile(
 					"/home/self/src/@/zecret/output/keypair/server",
@@ -57,14 +62,14 @@ export default async function server(argv: any & { _: string[] }) {
 	);
 
 	const whoAmIResponse = await WhoAmICommand({
-		tag: "WhoAmI",
+		tag: "WhoAmICommand",
 		value: {
 			token: server_enc_jwt,
 		},
 	});
 
 	const refreshResponse = await RefreshTokenCommand({
-		tag: "RefreshToken",
+		tag: "RefreshTokenCommand",
 		value: {
 			token: server_enc_jwt,
 		},
@@ -74,4 +79,53 @@ export default async function server(argv: any & { _: string[] }) {
 
 	console.log(whoAmIResponse);
 	console.log(server_enc_jwt, refreshResponse.value.token);
+
+	const parsedJwt = await parseJwt(
+		decryptWithGithubPrivateKey(
+			refreshResponse.value.token,
+			await fs.readFile("/home/self/.ssh/id_rsa", "utf8")
+		),
+		{ autoRefresh: false }
+	);
+
+	// const upsertSecretsResponse = await UpsertSecretsCommand({
+	// 	tag: "UpsertSecretsCommand",
+	// 	value: {
+	// 		token: server_enc_jwt,
+	// 		secrets: [
+	// 			{
+	// 				key: "DATABASE_URL",
+	// 				value: encryptWithSecret(
+	// 					"postgres://api:password@db:5432/database",
+	// 					parsedJwt.shared_secret
+	// 				),
+	// 				path: "/odin/api",
+	// 			},
+	// 			{
+	// 				key: "DATABASE_URL",
+	// 				value: encryptWithSecret(
+	// 					"postgres://sql:password@db:5432/database",
+	// 					parsedJwt.shared_secret
+	// 				),
+	// 				path: "/odin/sql",
+	// 			},
+	// 			{
+	// 				key: "DATABASE_URL",
+	// 				value: encryptWithSecret(
+	// 					"postgres://auth:password@db:5432/database",
+	// 					parsedJwt.shared_secret
+	// 				),
+	// 				path: "/odin/auth",
+	// 			},
+	// 			{
+	// 				key: "DATABASE_URL",
+	// 				value: encryptWithSecret(
+	// 					"postgres://files:password@db:5432/database",
+	// 					parsedJwt.shared_secret
+	// 				),
+	// 				path: "/odin/files",
+	// 			},
+	// 		],
+	// 	},
+	// });
 }

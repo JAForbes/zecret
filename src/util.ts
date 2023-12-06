@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import assert from "assert";
 import jsonwebtoken, { TokenExpiredError } from "jsonwebtoken";
 import { state } from "./server-state";
-import { DecryptedToken } from "./types";
+import { DecodedToken, EncryptedWithSecret } from "./types";
 import RefreshTokenCommand from "./server-token-refresh";
 
 export const handleFetchFailure = async (x: Response): Promise<Response> => {
@@ -95,7 +95,7 @@ export async function parseJwt(
 	token: string,
 	options: { autoRefresh: boolean }
 ) {
-	let parsedJwt: DecryptedToken | null = null;
+	let parsedJwt: DecodedToken | null = null;
 	assert(state.state !== "idle");
 
 	parseToken: {
@@ -107,7 +107,7 @@ export async function parseJwt(
 			if (options.autoRefresh && err instanceof TokenExpiredError) {
 				try {
 					const res = await RefreshTokenCommand({
-						tag: "RefreshToken",
+						tag: "RefreshTokenCommand",
 						value: {
 							token,
 						},
@@ -134,4 +134,32 @@ export async function parseJwt(
 	assert(parsedJwt != null);
 
 	return parsedJwt;
+}
+
+export function encryptWithSecret(
+	message: string,
+	secret: string
+): EncryptedWithSecret {
+	let iv = crypto.randomBytes(16);
+	let key = Buffer.from(secret);
+	let cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+	let encrypted = cipher.update(message, "utf-8", "hex") + cipher.final("hex");
+	return {
+		iv: iv.toString("hex"),
+		cipher_text: encrypted,
+	};
+}
+export function decryptWithSecret(
+	message: { iv: string; cipher_text: string },
+	secret: string
+): string {
+	let iv = Buffer.from(message.iv, "hex");
+	let key = Buffer.from(secret);
+	const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+
+	let decrypted =
+		decipher.update(message.cipher_text, "hex", "utf-8") +
+		decipher.final("utf8");
+
+	return decrypted;
 }

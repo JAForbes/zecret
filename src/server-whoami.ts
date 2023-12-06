@@ -1,13 +1,13 @@
 import jsonwebtoken, { TokenExpiredError } from "jsonwebtoken";
 import assert from "node:assert";
 import { state } from "./server-state";
-import { DecryptedToken } from "./types";
+import { DecodedToken } from "./types";
 import { decryptWithBufferPrivateKey, parseJwt, serverDecrypt } from "./util";
 import { LoginCommand } from "./server-login";
 import RefreshTokenCommand from "./server-token-refresh";
 
 export type WhoAmICommand = {
-	tag: "WhoAmI";
+	tag: "WhoAmICommand";
 	value: {
 		token: string;
 	};
@@ -58,7 +58,7 @@ export async function WhoAmICommand(
 
 	assert(token != null);
 
-	let parsedJwt: DecryptedToken | null = null;
+	let parsedJwt: DecodedToken | null = null;
 	try {
 		parsedJwt = await parseJwt(token, { autoRefresh: true });
 	} catch (e) {

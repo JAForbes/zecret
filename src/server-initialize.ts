@@ -6,6 +6,7 @@ import {
 	InitializeStoreResponse,
 	State,
 } from "./types";
+import { upsertOwners } from "./database";
 
 export async function InitializeStoreCommand(
 	command: InitializeStoreCommand
@@ -49,6 +50,8 @@ export async function InitializeStoreCommand(
 	};
 
 	replaceState(newState);
+
+	await upsertOwners(command.value.owners);
 
 	return {
 		tag: "InitializeStoreOk",

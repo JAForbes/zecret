@@ -1,19 +1,28 @@
+import { LoginCommand } from "./server-login";
+import { WhoAmICommand } from "./server-whoami";
+
+export type EncryptedWithSecret = {
+	iv: string;
+	cipher_text: string;
+};
+
+export type UpsertSecret = {
+	key: string;
+	path: string;
+	value: EncryptedWithSecret;
+};
+
 export type KeyPair = {
 	private_key: string;
 	public_key: string;
 };
 
-export type BufferKeyPair = {
-	private_key: Buffer;
-	public_key: Buffer;
-};
-
-export type DecryptedToken = {
+export type DecodedToken = {
 	gh: {
 		username: string;
 	};
 
-	shared_cipher: string;
+	shared_secret: string;
 
 	public_key_hash: string;
 
@@ -25,16 +34,6 @@ export type DecryptedToken = {
 	exp: number;
 };
 
-export type State =
-	| {
-			state: "idle";
-	  }
-	| {
-			state: "active";
-			key_pairs: BufferKeyPair[];
-			token_secret: string;
-	  };
-
 export type EncryptedSecretRequestObject = {
 	path: string;
 
@@ -44,7 +43,7 @@ export type EncryptedSecretRequestObject = {
 };
 
 export type PutCommand = {
-	tag: "Put";
+	tag: "PutCommand";
 	value: {
 		public_key: string;
 		secrets: EncryptedSecretRequestObject[];
@@ -52,10 +51,11 @@ export type PutCommand = {
 };
 
 export type InitializeStoreCommand = {
-	tag: "InitializeStore";
+	tag: "InitializeStoreCommand";
 	value: {
 		key_pair: KeyPair;
 		token_secret: string;
+		owners: string[];
 	};
 };
 
@@ -74,7 +74,7 @@ export type InitializeStoreErr = {
 export type InitializeStoreResponse = InitializeStoreOk | InitializeStoreErr;
 
 export type RollServerKeyPairCommand = {
-	tag: "RollServerKeyPair";
+	tag: "RollServerKeyPairCommand";
 	value: {
 		old_private_key: string;
 		new_private_key: string;
@@ -85,5 +85,6 @@ export type RollServerKeyPairCommand = {
 export type * from "./server-login";
 export type * from "./server-whoami";
 export type * from "./server-token-refresh";
+export type * from "./server-state";
 
-export type Command = LoginCommand | InitializeStoreCommand;
+export type Command = WhoAmICommand | LoginCommand | InitializeStoreCommand;

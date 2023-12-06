@@ -1,7 +1,7 @@
 import * as util from "./util";
 import jsonwebtoken from "jsonwebtoken";
 import crypto from "crypto";
-import { DecryptedToken } from "./types";
+import { DecodedToken } from "./types";
 import { state } from "./server-state";
 import randomString from "crypto-random-string";
 
@@ -85,7 +85,7 @@ export async function LoginCommand(
 		.update(formatted_ssh_key)
 		.digest("base64");
 
-	const shared_cipher = randomString({
+	const shared_secret = randomString({
 		length: 32,
 		type: "alphanumeric",
 	});
@@ -103,9 +103,9 @@ export async function LoginCommand(
 			gh: {
 				username: safe_gh_user,
 			},
-			shared_cipher,
+			shared_secret,
 			public_key_hash,
-		} as DecryptedToken,
+		} as DecodedToken,
 		state.token_secret
 	);
 

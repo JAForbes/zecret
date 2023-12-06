@@ -1,5 +1,5 @@
 import { state } from "./server-state";
-import { DecryptedToken } from "./types";
+import { DecodedToken } from "./types";
 import jsonwebtoken from "jsonwebtoken";
 
 import randomString from "crypto-random-string";
@@ -13,7 +13,7 @@ import assert from "assert";
 import crypto from "crypto";
 
 export type RefreshTokenCommand = {
-	tag: "RefreshToken";
+	tag: "RefreshTokenCommand";
 	value: {
 		token: string;
 	};
@@ -50,7 +50,7 @@ export default async function RefreshTokenCommand(
 
 	assert(token != null);
 
-	let parsedJwt: DecryptedToken | null = null;
+	let parsedJwt: DecodedToken | null = null;
 	try {
 		parsedJwt = await parseJwt(token, { autoRefresh: false });
 	} catch (e) {
@@ -89,7 +89,7 @@ export default async function RefreshTokenCommand(
 		};
 	}
 
-	const shared_cipher = randomString({
+	const shared_secret = randomString({
 		length: 32,
 		type: "alphanumeric",
 	});
@@ -103,9 +103,9 @@ export default async function RefreshTokenCommand(
 			gh: {
 				username: parsedJwt.gh.username,
 			},
-			shared_cipher,
+			shared_secret,
 			public_key_hash: parsedJwt.public_key_hash,
-		} as DecryptedToken,
+		} as DecodedToken,
 		state.token_secret
 	);
 
