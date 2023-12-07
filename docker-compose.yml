@@ -17,6 +17,17 @@ services:
       timeout: 5s
       retries: 5
 
+  migrations:
+    build:
+      context: ./services/migrations
+      target: dev
+    environment:
+      - DATABASE_URL=postgres://postgres:password@postgres:5432/postgres
+    volumes:
+      - ./services/migrations/migrations:/usr/src/app/migrations
+    depends_on:
+      - postgres
+
   dev:
     build: ./services/server
     command: bash -c 'npm install && node run.js dev -- serve'
