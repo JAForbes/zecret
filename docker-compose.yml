@@ -17,3 +17,14 @@ services:
       timeout: 5s
       retries: 5
 
+  dev:
+    image: node:16-alpine
+    command: sh -c 'npm install && node run.js dev'
+    working_dir: $PWD
+    user: node
+    volumes:
+      - $PWD:$PWD
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
