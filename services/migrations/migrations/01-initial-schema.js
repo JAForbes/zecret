@@ -5,10 +5,11 @@ export const teardown = async (sql) => {
 		drop role zecret_api;
 	`.catch(() => {})
 }
-export const action = async (sql, { roles: { service, migration } }) => {
+export const action = async (sql, { roles }) => {
 	await sql`
-		set role ${sql.unsafe(migration)}
+		set role ${sql.unsafe(roles.migration)}
 	`
+	const service = sql.unsafe(roles.service)
 
 	await sql`
 		create extension citext schema public;
@@ -18,7 +19,7 @@ export const action = async (sql, { roles: { service, migration } }) => {
 		create schema zecret;
 	`
 	await sql`
-		grant usage on schema zecret to ${sql.unsafe(service)};
+		grant usage on schema zecret to ${service};
 	`
 
 	await sql`
@@ -146,10 +147,32 @@ export const action = async (sql, { roles: { service, migration } }) => {
 	`
 
 	await sql`
+		grant select on zecret.grant_level to ${service}
+	`
+	for (let [table, grants] of [
+		["zecret.user", "select, insert, update"],
+		["zecret.org", "select, insert, update"],
+		["zecret.group", "select, insert, update"],
+		["zecret.org_user", "select, insert, update"],
+		["zecret.group_user", "select, insert, update"],
+		["zecret.grant", "select, insert, update"],
+		["zecret.secret", "select, insert, update"],
+	]) {
+		await sql`
+			alter table ${sql(table)} 
+				enable row level security
+		`
+
+		await sql`
+			grant ${sql.unsafe(grants)} on ${sql(table)} to ${service}
+		`
+	}
+
+	await sql`
 		create role zecret_api with login password 'zecret' noinherit;
 	`
 
 	await sql`
-		grant ${sql.unsafe(service)} to zecret_api;
+		grant ${service} to zecret_api;
 	`
 }
