@@ -32,14 +32,67 @@ export const action = async (sql, { roles }) => {
 	await sql`create table zecret.user (
 		user_id uuid primary key default gen_random_uuid()
 		,github_user_id public.citext null unique
-		,like zecret.meta
+		,like zecret.meta including defaults
 	);`
+
+	await sql`
+		create or replace function zecret.get_active_user()
+		returns uuid
+		as $$
+			with xs as (
+				select current_setting('zecret.user_id', true) as v
+			)
+			
+			select 
+				(case v
+					when '' then null
+					else v
+				end)::uuid
+			from xs;
+		$$
+		language sql
+		immutable
+		set search_path = ''
+		security definer
+		;
+	`
 
 	await sql`
 		create table zecret.org(
 				organization_name public.citext primary key
-				,like zecret.meta
+				,primary_owner_id uuid not null references zecret.user(user_id) default zecret.get_active_user()
+				,like zecret.meta including defaults
 		);
+	`
+
+	await sql`
+		create or replace function zecret.get_active_org()
+		returns public.citext
+		as $$
+			with xs as (
+				select current_setting('zecret.org', true) as v
+			)
+			
+			select 
+				(case v
+					when '' then null
+					else v
+				end)::public.citext
+			from xs;
+		$$
+		language sql
+		immutable
+		set search_path = ''
+		security definer
+		;
+	`
+
+	await sql`
+		grant execute on function zecret.get_active_user to ${service};
+	`
+
+	await sql`
+		grant execute on function zecret.get_active_org to ${service};
 	`
 
 	await sql`
@@ -52,7 +105,7 @@ export const action = async (sql, { roles }) => {
 						on delete cascade
 						deferrable initially deferred
 				, primary key (group_name, organization_name)
-				, like zecret.meta
+				, like zecret.meta including defaults
 		);
 	`
 
@@ -69,7 +122,7 @@ export const action = async (sql, { roles }) => {
 				on delete cascade
 				deferrable initially deferred
 			, primary key (organization_name, user_id)
-			, like zecret.meta
+			, like zecret.meta including defaults
 		);
 	`
 
@@ -79,7 +132,7 @@ export const action = async (sql, { roles }) => {
 			, organization_name public.citext not null
 			, user_id uuid references zecret.user(user_id)
 			, primary key (group_name, user_id)
-			, like zecret.meta
+			, like zecret.meta including defaults
 			, constraint fk_org_and_group foreign key(organization_name, group_name)
 				references zecret.group(organization_name, group_name)
 				on update cascade
@@ -104,31 +157,50 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
-		create table zecret.grant(
+		create table zecret.grant_user(
 			path public.citext not null
 			, organization_name public.citext null
-			, group_name public.citext null
 			, user_id uuid null
 			, grant_level public.citext not null
 				references zecret.grant_level(grant_level)
-			, like zecret.meta
+			, like zecret.meta including defaults
 
-			, primary key (organization_name, path, grant_level, group_name, user_id)
-			, constraint either_user_or_group
-				check (
-						(group_name is null) <> (user_id is null)
-				)
-			, constraint fk_org_and_group foreign key(organization_name, group_name)
-				references zecret.group(organization_name, group_name)
-				on update cascade
-				on delete cascade
-				deferrable initially deferred
+			, primary key (organization_name, path, grant_level, user_id)
+
 			, constraint fk_org_and_user foreign key(organization_name, user_id)
 				references zecret.org_user(organization_name, user_id)
 				on update cascade
 				on delete cascade
 				deferrable initially deferred
 		);
+	`
+
+	await sql`
+		create table zecret.grant_group(
+			path public.citext not null
+			, organization_name public.citext null
+			, group_name public.citext null
+			, grant_level public.citext not null
+				references zecret.grant_level(grant_level)
+			, like zecret.meta including defaults
+
+			, primary key (organization_name, path, grant_level, group_name)
+
+			, constraint fk_org_and_group foreign key(organization_name, group_name)
+				references zecret.group(organization_name, group_name)
+				on update cascade
+				on delete cascade
+				deferrable initially deferred
+		);
+	`
+
+	await sql`
+		create view zecret.grant as
+			select organization_name, path, null::uuid as user_id, group_name, grant_level, created_at, updated_at, deleted_at
+			from zecret.grant_group
+			union all
+			select organization_name, path, user_id, null::public.citext as group_name, grant_level, created_at, updated_at, deleted_at
+			from zecret.grant_user
 	`
 
 	await sql`
@@ -142,7 +214,7 @@ export const action = async (sql, { roles }) => {
 			, key public.citext not null
 			, value text not null
 			, primary key (organization_name, path, key)
-			, like zecret.meta
+			, like zecret.meta including defaults
 		);
 	`
 
@@ -155,7 +227,8 @@ export const action = async (sql, { roles }) => {
 		["zecret.group", "select, insert, update"],
 		["zecret.org_user", "select, insert, update"],
 		["zecret.group_user", "select, insert, update"],
-		["zecret.grant", "select, insert, update"],
+		["zecret.grant_user", "select, insert, update"],
+		["zecret.grant_group", "select, insert, update"],
 		["zecret.secret", "select, insert, update"],
 	]) {
 		await sql`
@@ -169,7 +242,7 @@ export const action = async (sql, { roles }) => {
 	}
 
 	await sql`
-		create role zecret_api with login password 'zecret' noinherit;
+		create role zecret_api with login password 'zecret';
 	`
 
 	await sql`

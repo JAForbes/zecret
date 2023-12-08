@@ -25,6 +25,8 @@ services:
       - DATABASE_URL=postgres://postgres:password@postgres:5432/postgres
     volumes:
       - ./services/migrations/migrations:/usr/src/app/migrations
+      - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
+
     depends_on:
       - postgres
 

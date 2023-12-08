@@ -13,7 +13,7 @@ FROM base as dev
 
 RUN npm install nodemon
 
-CMD ["npx", "nodemon", "-L", "--watch", "./migrations/*.js","--watch", "./tests/*.js", "--exec", "$(npm bin)/pgmg", "$DATABASE_URL", "migrations/*.js", "--dev"]
+CMD ["npx", "nodemon", "-L", "--watch", "./migrations/*.js","--watch", "./migrations/**/*.js", "--exec", "$(npm bin)/pgmg", "$DATABASE_URL", "migrations/*.js", "--dev"]
 
 FROM base as prod
 
