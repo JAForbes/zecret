@@ -220,6 +220,7 @@ export const action = async (sql, { roles }) => {
 			, key public.citext not null
 			, value text not null
 			, iv text not null
+			, symmetric_secret text not null
 			, server_public_key_id uuid not null references zecret.server_public_key(server_public_key_id)
 			, primary key (organization_name, path, key, server_public_key_id)
 			, like zecret.meta including defaults

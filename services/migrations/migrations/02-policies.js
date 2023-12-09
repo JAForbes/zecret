@@ -421,5 +421,5 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await testUserRls(sql)
-	// await testOrgRls(sql)
+	await testOrgRls(sql)
 }

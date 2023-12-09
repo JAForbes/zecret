@@ -1,6 +1,14 @@
 import assert from "assert"
 import { DecodedToken, UpsertSecret } from "./types.js"
-import { parseJwt, serverDecrypt, tokenBoilerPlate } from "./util.js"
+import randomString from "crypto-random-string"
+import {
+	decryptWithSecret,
+	encryptWithBufferPublicKey,
+	encryptWithSecret,
+	parseJwt,
+	serverDecrypt,
+	tokenBoilerPlate
+} from "./util.js"
 import { state } from "./server-state.js"
 
 type UpsertSecretsCommand = {
@@ -51,7 +59,7 @@ export default async function UpsertSecretsCommand(
 	}
 
 	const sql = data.state.postgres
-	console.log("hi2")
+
 	return sql
 		.begin(async (sql) => {
 			await sql`
@@ -59,21 +67,66 @@ export default async function UpsertSecretsCommand(
 				from zecret.user U
 				where U.github_user_id = ${data.decoded.gh.username}
 			`
-			const publicKeys: [{ server_public_key_id: string }] = await sql`
-				select server_public_key_id
-				from zecret.server_public_key
-				where server_public_key_pkcs8 in ${sql(
-					data.state.key_pairs.map((x) => x.public_key.toString("hex"))
-				)}
-			`
 
-			const inputs = command.value.secrets.flatMap((x) =>
-				publicKeys.map(({ server_public_key_id }) => ({
-					...x,
-					value: x.value.cipher_text,
-					iv: x.value.iv,
-					server_public_key_id
-				}))
+			// Because Asymmetric encryption is slower, and has length limits
+			// we use symmetric encryption with a one time secret.
+			//
+			// We use this secret to encrypt the value as it has stable performance
+			// and no length limits.
+			//
+			// We then store an encrypted version of the secret on the row.
+			// We encrypt the secret 1 time per API call using PKE
+			// so that we can retrieve the symmetric secret, and in turn decrypt
+			// the secret value.
+			//
+			// This means if the database was ever exposed, without the server
+			// private key, nothing could be decrypted, but we don't pay the cost
+			// of unbounded asymmetric encryption/decryption.
+			//
+			// Note we do not use the shared secret on the caller's JWT, this is
+			// only used for data in transit.  This means if a users token is leaked
+			// there is no direct way to decrypt a stored value without the server's
+			// assistance.
+			//
+
+			// the "one time" symmetric secret, that will be used
+			// to encrypt the user's value
+			const symmetric_secret = randomString({
+				length: 32,
+				type: "alphanumeric"
+			})
+
+			// we encrypt a copy once per server key pair
+			// to allow for rolling the key pair
+			const inputs = data.state.key_pairs.flatMap(
+				({ server_public_key_id, public_key }) => {
+					// we encrypt the "one time" secret with the server's
+					// public key, so it can be restored when the secret
+					// is retrieved, as long as the server still has
+					// access to that private key
+					const encryptedSymmetricSecret = encryptWithBufferPublicKey(
+						symmetric_secret,
+						public_key
+					)
+
+					return command.value.secrets.map((x) => {
+						// We first decrypt the secret the user sent
+						// using their JWT shared secret.
+						//
+						// Then we encrypt using the "one time" secret
+						const { cipher_text: value, iv } = encryptWithSecret(
+							decryptWithSecret(x.value, data.decoded.shared_secret),
+							symmetric_secret
+						)
+						return {
+							...x,
+							value,
+							iv,
+							server_public_key_id,
+							symmetric_secret: encryptedSymmetricSecret
+						}
+					})
+				}
 			)
 
 			await sql`
@@ -84,14 +137,16 @@ export default async function UpsertSecretsCommand(
 					"key",
 					"value",
 					"iv",
-					"server_public_key_id"
+					"server_public_key_id",
+					"symmetric_secret"
 				)}
 
 
 				on conflict (organization_name, path, key, server_public_key_id)
 				do update set
 					value = excluded.value
-					,iv = excluded.value
+					,iv = excluded.iv
+					,symmetric_secret = excluded.symmetric_secret
 					,updated_at = now()
 			`
 		})
@@ -102,6 +157,7 @@ export default async function UpsertSecretsCommand(
 			} as UpsertSecretsResponse
 		})
 		.catch((err) => {
+			console.error(err)
 			return {
 				tag: "UpsertSecretsErr",
 				value: {

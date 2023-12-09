@@ -57,7 +57,7 @@ export default async function server(argv: any & { _: string[] }) {
 		await fs.readFile("/home/self/.ssh/id_rsa", "utf8")
 	)
 
-	const server_enc_jwt = await encryptWithBufferPublicKey(
+	let server_enc_jwt = await encryptWithBufferPublicKey(
 		jwt,
 		state.key_pairs[0].public_key
 	)
@@ -79,16 +79,17 @@ export default async function server(argv: any & { _: string[] }) {
 	assert(refreshResponse.tag === "RefreshTokenOk")
 
 	console.log(whoAmIResponse)
-	console.log(server_enc_jwt, refreshResponse.value.token)
 
-	const parsedJwt = await parseJwt(
-		decryptWithGithubPrivateKey(
-			refreshResponse.value.token,
-			await fs.readFile("/home/self/.ssh/id_rsa", "utf8")
-		),
-		{ autoRefresh: false }
+	const encodedJwt = decryptWithGithubPrivateKey(
+		refreshResponse.value.token,
+		await fs.readFile("/home/self/.ssh/id_rsa", "utf8")
 	)
+	const parsedJwt = await parseJwt(encodedJwt, { autoRefresh: false })
 
+	server_enc_jwt = await encryptWithBufferPublicKey(
+		encodedJwt,
+		state.key_pairs[0].public_key
+	)
 	const createOrgResponse = await CreateOrgCommand({
 		tag: "CreateOrgCommand",
 		value: {
@@ -96,7 +97,6 @@ export default async function server(argv: any & { _: string[] }) {
 			token: server_enc_jwt
 		}
 	})
-	console.log(createOrgResponse, "hi6")
 
 	const upsertSecretsResponse = await UpsertSecretsCommand({
 		tag: "UpsertSecretsCommand",
@@ -142,4 +142,11 @@ export default async function server(argv: any & { _: string[] }) {
 			]
 		}
 	})
+	console.log(upsertSecretsResponse)
+
+	// const cliRequestSecretsResponse = await RequestSecretsCommand({
+	// 	organization_name: "harth",
+	// 	paths: ["/odin"],
+	// 	token: server_enc_jwt
+	// })
 }
