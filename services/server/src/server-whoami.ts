@@ -1,83 +1,59 @@
-import jsonwebtoken, { TokenExpiredError } from "jsonwebtoken";
-import assert from "node:assert";
-import { state } from "./server-state";
-import { DecodedToken } from "./types";
-import { decryptWithBufferPrivateKey, parseJwt, serverDecrypt } from "./util";
-import { LoginCommand } from "./server-login";
-import RefreshTokenCommand from "./server-token-refresh";
+import jsonwebtoken, { TokenExpiredError } from "jsonwebtoken"
+import assert from "node:assert"
+import { state } from "./server-state.js"
+import { DecodedToken } from "./types.js"
+import {
+	decryptWithBufferPrivateKey,
+	parseJwt,
+	serverDecrypt,
+	tokenBoilerPlate
+} from "./util.js"
+import { LoginCommand } from "./server-login.js"
+import RefreshTokenCommand from "./server-token-refresh.js"
 
 export type WhoAmICommand = {
-	tag: "WhoAmICommand";
+	tag: "WhoAmICommand"
 	value: {
-		token: string;
-	};
-};
+		token: string
+	}
+}
 
 export type WhoAmIOk = {
-	tag: "WhoAmIOk";
+	tag: "WhoAmIOk"
 	value: {
 		gh: {
-			username: string;
-		};
-		token: string;
-	};
-};
+			username: string
+		}
+		token: string
+	}
+}
 
 export type WhoAmIErr = {
-	tag: "WhoAmIErr";
+	tag: "WhoAmIErr"
 	value: {
-		message: string;
-	};
-};
+		message: string
+	}
+}
 
-export type WhoAmIResponse = WhoAmIOk | WhoAmIErr;
+export type WhoAmIResponse = WhoAmIOk | WhoAmIErr
 
 export async function WhoAmICommand(
 	command: WhoAmICommand
 ): Promise<WhoAmIResponse> {
-	if (state.state === "idle") {
-		return {
-			tag: "WhoAmIErr",
-			value: {
-				message: "Server has not yet initialized",
-			},
-		};
+	const [error, data] = await tokenBoilerPlate(
+		(message) => ({ tag: "WhoAmIErr", value: { message } } as WhoAmIErr),
+		command.value.token
+	)
+	if (error) {
+		return error
 	}
-
-	let token: string | null = null;
-	try {
-		token = serverDecrypt(command.value.token);
-	} catch (err) {
-		return {
-			tag: "WhoAmIErr",
-			value: {
-				message: "Token could not be decrypted with server public key",
-			},
-		};
-	}
-
-	assert(token != null);
-
-	let parsedJwt: DecodedToken | null = null;
-	try {
-		parsedJwt = await parseJwt(token, { autoRefresh: true });
-	} catch (e) {
-		return {
-			tag: "WhoAmIErr",
-			value: {
-				message: e.message,
-			},
-		};
-	}
-	assert(parsedJwt != null);
-
 	return {
 		tag: "WhoAmIOk",
 		value: {
 			gh: {
-				username: parsedJwt.gh.username,
+				username: data.decoded.gh.username
 			},
-			token: command.value.token,
-		},
-	};
+			token: command.value.token
+		}
+	}
 }

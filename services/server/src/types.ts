@@ -1,90 +1,91 @@
-import { LoginCommand } from "./server-login";
-import { WhoAmICommand } from "./server-whoami";
+import { LoginCommand } from "./server-login.js"
+import { WhoAmICommand } from "./server-whoami.js"
 
 export type EncryptedWithSecret = {
-	iv: string;
-	cipher_text: string;
-};
+	iv: string
+	cipher_text: string
+}
 
 export type UpsertSecret = {
-	key: string;
-	path: string;
-	value: EncryptedWithSecret;
-};
+	organization_name: string
+	path: string
+	key: string
+	value: EncryptedWithSecret
+}
 
 export type KeyPair = {
-	private_key: string;
-	public_key: string;
-};
+	private_key: string
+	public_key: string
+}
 
 export type DecodedToken = {
 	gh: {
-		username: string;
-	};
+		username: string
+	}
 
-	shared_secret: string;
+	shared_secret: string
 
-	public_key_hash: string;
+	public_key_hash: string
 
 	// when the token was issued
-	iat: number;
+	iat: number
 
 	// at this point check github still lists that key
 	// that's it, no need to log the user out
-	exp: number;
-};
+	exp: number
+}
 
 export type EncryptedSecretRequestObject = {
-	path: string;
+	path: string
 
-	key: string;
+	key: string
 
-	enc_value: string;
-};
+	enc_value: string
+}
 
 export type PutCommand = {
-	tag: "PutCommand";
+	tag: "PutCommand"
 	value: {
-		public_key: string;
-		secrets: EncryptedSecretRequestObject[];
-	};
-};
+		public_key: string
+		secrets: EncryptedSecretRequestObject[]
+	}
+}
 
 export type InitializeStoreCommand = {
-	tag: "InitializeStoreCommand";
+	tag: "InitializeStoreCommand"
 	value: {
-		key_pair: KeyPair;
-		token_secret: string;
-		owners: string[];
-	};
-};
+		key_pair: KeyPair
+		token_secret: string
+		database_url: string
+	}
+}
 
 export type InitializeStoreOk = {
-	tag: "InitializeStoreOk";
-	value: {};
-};
+	tag: "InitializeStoreOk"
+	value: {}
+}
 
 export type InitializeStoreErr = {
-	tag: "InitializeStoreErr";
+	tag: "InitializeStoreErr"
 	value: {
-		message: string;
-	};
-};
+		message: string
+	}
+}
 
-export type InitializeStoreResponse = InitializeStoreOk | InitializeStoreErr;
+export type InitializeStoreResponse = InitializeStoreOk | InitializeStoreErr
 
 export type RollServerKeyPairCommand = {
-	tag: "RollServerKeyPairCommand";
+	tag: "RollServerKeyPairCommand"
 	value: {
-		old_private_key: string;
-		new_private_key: string;
-		new_public_key: string;
-	};
-};
+		old_private_key: string
+		new_private_key: string
+		new_public_key: string
+	}
+}
 
-export type * from "./server-login";
-export type * from "./server-whoami";
-export type * from "./server-token-refresh";
-export type * from "./server-state";
+export type * from "./server-login.js"
+export type * from "./server-whoami.js"
+export type * from "./server-token-refresh.js"
+export type * from "./server-state.js"
 
-export type Command = WhoAmICommand | LoginCommand | InitializeStoreCommand;
+export type Command = WhoAmICommand | LoginCommand | InitializeStoreCommand

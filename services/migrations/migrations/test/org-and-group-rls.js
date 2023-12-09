@@ -2,6 +2,12 @@ import assert from "assert"
 import * as util from "./utils.js"
 
 export default util.test("org and group rls", async (sql) => {
+	// in reality this would be a hex encoded pkcs8 public key
+	// but for testing RLS it doesn't matter
+	const [{ server_public_key_id }] = await sql`
+		insert into zecret.server_public_key(server_public_key_pkcs8) values ('')
+		returning server_public_key_id
+	`
 	const [
 		{ user_id: JAForbes },
 		{ user_id: JBravoe },
@@ -66,8 +72,8 @@ export default util.test("org and group rls", async (sql) => {
 
 	// JAForbes can write because he is primary owner in that org
 	await sql`
-		insert into zecret.secret(organization_name, path, key, value)
-			values ('harth', '/odin/zip', 'DATABASE_URL', 'postgres://zip:password@postgres:5432/postgres')
+		insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+			values ('harth', '/odin/zip', 'DATABASE_URL', 'postgres://zip:password@postgres:5432/postgres', '', ${server_public_key_id})
 	`
 
 	await sql`select zecret.set_active_user(${JBravoe})`
@@ -77,8 +83,8 @@ export default util.test("org and group rls", async (sql) => {
 	await util.expectErr(
 		sql,
 		(sql) => sql`
-			insert into zecret.secret(organization_name, path, key, value)
-				values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+			insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+				values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 		`,
 		/new row violates row-level security policy for table "secret"/
 	)
@@ -98,16 +104,16 @@ export default util.test("org and group rls", async (sql) => {
 
 	// JBravoe can write a secret now to that path because of the group grant
 	await sql`
-		insert into zecret.secret(organization_name, path, key, value)
-			values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+		insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+			values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 	`
 
 	// But writing to a different path will be rejected
 	await util.expectErr(
 		sql,
 		(sql) => sql`
-			insert into zecret.secret(organization_name, path, key, value)
-				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+			insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 		`,
 		/new row violates row-level security policy for table "secret"/
 	)
@@ -116,16 +122,16 @@ export default util.test("org and group rls", async (sql) => {
 	await util.expectErr(
 		sql,
 		(sql) => sql`
-			insert into zecret.secret(organization_name, path, key, value)
-				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+			insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 		`,
 		/new row violates row-level security policy for table "secret"/
 	)
 
 	await sql`select zecret.set_active_user(${JAForbes})`
 	await sql`
-		insert into zecret.secret(organization_name, path, key, value)
-				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+		insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 	`
 
 	await sql`select zecret.set_active_user(${JM})`
@@ -134,8 +140,8 @@ export default util.test("org and group rls", async (sql) => {
 	await util.expectErr(
 		sql,
 		(sql) => sql`
-			insert into zecret.secret(organization_name, path, key, value)
-				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres')
+			insert into zecret.secret(organization_name, path, key, value, iv, server_public_key_id)
+				values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '', ${server_public_key_id})
 		`,
 		/new row violates row-level security policy for table "secret"/
 	)

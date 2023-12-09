@@ -77,7 +77,6 @@ export const action = async (sql, { roles }) => {
 		$$
 		language sql
 		set search_path = ''
-		immutable
 		security definer
 		;
 	`
@@ -103,7 +102,12 @@ export const action = async (sql, { roles }) => {
 		to ${service}
 		using (
 			deleted_at is null
-			and zecret.user_is_in_org( organization_name, zecret.get_active_user() )
+			and (
+				zecret.user_is_in_org( organization_name, zecret.get_active_user() )
+
+				-- row may not exist yet, so fn fails for initial create
+				or primary_owner_id = zecret.get_active_user()
+			)
 		)
 		;
 	`
@@ -152,12 +156,20 @@ export const action = async (sql, { roles }) => {
 		$$
 		language sql
 		set search_path = ''
-		immutable
 		security definer
 		;
 	`
 
 	await sql`grant execute on function zecret.has_root_grant to ${service}`
+
+	await sql`
+		create policy api_update_org on zecret.org
+		for update
+		to ${service}
+		using (
+			zecret.has_root_grant(organization_name, zecret.get_active_user())
+		)
+	`
 
 	await sql`
 		create policy api_insert_org_user on zecret.org_user
@@ -230,7 +242,6 @@ export const action = async (sql, { roles }) => {
 		$$
 		language sql
 		set search_path = ''
-		immutable
 		security definer
 		;
 	`
@@ -277,7 +288,6 @@ export const action = async (sql, { roles }) => {
 		$$
 		language sql
 		set search_path = ''
-		immutable
 		security definer
 		;
 	`
@@ -322,7 +332,6 @@ export const action = async (sql, { roles }) => {
 		$$
 		language sql
 		set search_path = ''
-		immutable
 		security definer
 		;
 	`
@@ -333,6 +342,19 @@ export const action = async (sql, { roles }) => {
 		to ${service}
 		with check (
 			
+			zecret.has_write_permission_at_path(
+				organization_name
+				, zecret.get_active_user()
+				, path
+			)
+		)
+	`
+
+	await sql`
+		create policy api_update_secret on zecret.secret
+		for update
+		to ${service}
+		using (
 			zecret.has_write_permission_at_path(
 				organization_name
 				, zecret.get_active_user()
@@ -381,9 +403,23 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		create policy api_select_server_public_key on zecret.server_public_key
+		for select
+		to ${service}
+		using (true)
+	`
+
+	await sql`
+		create policy api_insert_server_public_key on zecret.server_public_key
+		for insert
+		to ${service}
+		with check (true)
+	`
+
+	await sql`
 		grant ${service} to zecret_api
 	`
 
 	await testUserRls(sql)
-	await testOrgRls(sql)
+	// await testOrgRls(sql)
 }

@@ -51,7 +51,6 @@ export const action = async (sql, { roles }) => {
 			from xs;
 		$$
 		language sql
-		immutable
 		set search_path = ''
 		security definer
 		;
@@ -81,7 +80,6 @@ export const action = async (sql, { roles }) => {
 			from xs;
 		$$
 		language sql
-		immutable
 		set search_path = ''
 		security definer
 		;
@@ -204,6 +202,14 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		create table zecret.server_public_key(
+			server_public_key_id uuid primary key default gen_random_uuid()
+			, server_public_key_pkcs8 text unique
+			, like zecret.meta including defaults
+		);
+	`
+
+	await sql`
 		create table zecret.secret(
 			path public.citext not null
 			, organization_name public.citext not null
@@ -213,7 +219,9 @@ export const action = async (sql, { roles }) => {
 				deferrable initially deferred
 			, key public.citext not null
 			, value text not null
-			, primary key (organization_name, path, key)
+			, iv text not null
+			, server_public_key_id uuid not null references zecret.server_public_key(server_public_key_id)
+			, primary key (organization_name, path, key, server_public_key_id)
 			, like zecret.meta including defaults
 		);
 	`
@@ -230,6 +238,7 @@ export const action = async (sql, { roles }) => {
 		["zecret.grant_user", "select, insert, update"],
 		["zecret.grant_group", "select, insert, update"],
 		["zecret.secret", "select, insert, update"],
+		["zecret.server_public_key", ["select, insert, update"]]
 	]) {
 		await sql`
 			alter table ${sql(table)} 
