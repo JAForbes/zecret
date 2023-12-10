@@ -147,6 +147,7 @@ export default async function UpsertSecretsCommand(
 					value = excluded.value
 					,iv = excluded.iv
 					,symmetric_secret = excluded.symmetric_secret
+					,server_public_key_id = excluded.server_public_key_id
 					,updated_at = now()
 			`
 		})

@@ -1,5 +1,6 @@
 import sshpk from "sshpk"
 import postgres from "postgres"
+import crypto from "crypto"
 
 import {
 	InitializeStoreCommand,
@@ -45,9 +46,12 @@ export async function InitializeStoreCommand(
 	const [err, data] = await sql`
 		with effect as (
 			insert into zecret.server_public_key(
-				server_public_key_pkcs8
+				server_public_key_id, server_public_key_pkcs8
 			)
-			values (${public_key.toString("hex")})
+			values (${crypto
+				.createHash("sha256")
+				.update(public_key.toString("hex"))
+				.digest("hex")},${public_key.toString("hex")})
 			on conflict (server_public_key_pkcs8) do nothing
 			returning server_public_key_id
 		)

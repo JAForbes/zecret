@@ -19,6 +19,7 @@ import { WhoAmICommand } from "./server-whoami.js"
 import RefreshTokenCommand from "./server-token-refresh.js"
 import UpsertSecretsCommand from "./server-upsert-secrets.js"
 import CreateOrgCommand from "./server-create-org.js"
+import RequestSecretsCommand from "./server-request-secrets.js"
 
 export default async function server(argv: any & { _: string[] }) {
 	const initializeStoreRes = await InitializeStoreCommand({
@@ -107,7 +108,7 @@ export default async function server(argv: any & { _: string[] }) {
 					organization_name: "harth",
 					key: "DATABASE_URL",
 					value: encryptWithSecret(
-						"postgres://api:password@db:5432/database",
+						"postgres://api:password@odin.db:5432/database",
 						parsedJwt.shared_secret
 					),
 					path: "/odin/api"
@@ -116,7 +117,7 @@ export default async function server(argv: any & { _: string[] }) {
 					organization_name: "harth",
 					key: "DATABASE_URL",
 					value: encryptWithSecret(
-						"postgres://sql:password@db:5432/database",
+						"postgres://sql:password@odin.db:5432/database",
 						parsedJwt.shared_secret
 					),
 					path: "/odin/sql"
@@ -125,7 +126,7 @@ export default async function server(argv: any & { _: string[] }) {
 					organization_name: "harth",
 					key: "DATABASE_URL",
 					value: encryptWithSecret(
-						"postgres://auth:password@db:5432/database",
+						"postgres://auth:password@odin.db:5432/database",
 						parsedJwt.shared_secret
 					),
 					path: "/odin/auth"
@@ -134,19 +135,36 @@ export default async function server(argv: any & { _: string[] }) {
 					organization_name: "harth",
 					key: "DATABASE_URL",
 					value: encryptWithSecret(
-						"postgres://files:password@db:5432/database",
+						"postgres://api:password@dropoff.db:5432/database",
 						parsedJwt.shared_secret
 					),
-					path: "/odin/files"
+					path: "/dropoff/api"
 				}
 			]
 		}
 	})
-	console.log(upsertSecretsResponse)
 
-	// const cliRequestSecretsResponse = await RequestSecretsCommand({
-	// 	organization_name: "harth",
-	// 	paths: ["/odin"],
-	// 	token: server_enc_jwt
-	// })
+	assert.equal(upsertSecretsResponse.tag, "UpsertSecretsOk")
+
+	const cliRequestSecretsResponse = await RequestSecretsCommand({
+		tag: "RequestSecretsCommand",
+		value: {
+			organization_name: "harth",
+			paths: ["/odin"],
+			token: server_enc_jwt
+		}
+	})
+
+	assert(cliRequestSecretsResponse.tag === "RequestSecretsOk")
+	assert.notEqual(cliRequestSecretsResponse.value.secrets.length, 0)
+
+	assert.equal(
+		"postgres://api:password@odin.db:5432/database",
+		decryptWithSecret(
+			cliRequestSecretsResponse.value.secrets.find(
+				(x) => x.path === "/odin/api" && x.key == "DATABASE_URL"
+			)!.value,
+			parsedJwt.shared_secret
+		)
+	)
 }

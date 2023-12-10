@@ -5,7 +5,9 @@ export default util.test("org and group rls", async (sql) => {
 	// in reality this would be a hex encoded pkcs8 public key
 	// but for testing RLS it doesn't matter
 	const [{ server_public_key_id }] = await sql`
-		insert into zecret.server_public_key(server_public_key_pkcs8) values ('')
+		insert into zecret.server_public_key(
+			server_public_key_pkcs8, server_public_key_id
+		) values ('', '')
 		returning server_public_key_id
 	`
 	const [

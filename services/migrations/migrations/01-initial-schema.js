@@ -203,7 +203,7 @@ export const action = async (sql, { roles }) => {
 
 	await sql`
 		create table zecret.server_public_key(
-			server_public_key_id uuid primary key default gen_random_uuid()
+			server_public_key_id text primary key
 			, server_public_key_pkcs8 text unique
 			, like zecret.meta including defaults
 		);
@@ -221,7 +221,7 @@ export const action = async (sql, { roles }) => {
 			, value text not null
 			, iv text not null
 			, symmetric_secret text not null
-			, server_public_key_id uuid not null references zecret.server_public_key(server_public_key_id)
+			, server_public_key_id text not null references zecret.server_public_key(server_public_key_id)
 			, primary key (organization_name, path, key, server_public_key_id)
 			, like zecret.meta including defaults
 		);
