@@ -30,10 +30,23 @@ services:
     depends_on:
       - postgres
 
-  dev:
+  server:
     build: ./services/server
-    command: bash -c 'npm install && node run.js dev -- serve'
+    command: bash -c 'npm install && node run.js dev'
     working_dir: $PWD/services/server
+    user: node
+    volumes:
+      - $PWD:$PWD
+      - $HOME/.ssh:$HOME/.ssh
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+
+  cli:
+    build: ./services/cli
+    command: bash -c 'npm install && node run.js dev'
+    working_dir: $PWD/services/cli
     user: node
     volumes:
       - $PWD:$PWD
