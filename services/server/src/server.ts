@@ -1,9 +1,6 @@
 import assert from 'node:assert'
 import * as fs from 'node:fs/promises'
-import jsonwebtoken from 'jsonwebtoken'
-import crypto from 'crypto'
 
-import { State } from './types.js'
 import {
 	decryptWithBufferPrivateKey,
 	decryptWithGithubPrivateKey,
@@ -19,9 +16,7 @@ import { state } from './server-state.js'
 import { WhoAmICommand } from './server-whoami.js'
 import RefreshTokenCommand from './server-token-refresh.js'
 import UpsertSecretsCommand from './server-upsert-secrets.js'
-import CreateOrgCommand from './server-create-org.js'
 import RequestSecretsCommand from './server-request-secrets.js'
-import CreateGroupCommand from './server-create-group.js'
 import ManageOrganizationCommand from './server-manage-organization.js'
 import ListGroupCommand from './server-list-groups.js'
 
@@ -148,13 +143,6 @@ export default async function server(argv: any & { _: string[] }) {
 			}
 		}
 	})
-	const createOrgResponse = await CreateOrgCommand({
-		tag: 'CreateOrgCommand',
-		value: {
-			organization_name: 'harth',
-			token: server_enc_jwt
-		}
-	})
 
 	assert(manageOrgResponse.tag === 'ManageOrganizationOk')
 
@@ -277,36 +265,30 @@ export default async function server(argv: any & { _: string[] }) {
 			)
 	)
 
-	let createGroupResponse = await CreateGroupCommand({
-		tag: 'CreateGroupCommand',
+	manageOrgResponse = await ManageOrganizationCommand({
+		tag: 'ManageOrganizationCommand',
 		value: {
-			group_name: 'developers',
 			organization_name: 'harth',
+			grants: {
+				add: [],
+				remove: []
+			},
+			group_members: {
+				add: [],
+				remove: []
+			},
+			users: { add: [], remove: [] },
+			groups: { add: ['developers'], remove: [] },
 			token: JBravoe_server_enc_jwt,
-			users: {
-				add: []
+			admins: {
+				add: [],
+				remove: []
 			}
 		}
 	})
 
-	assert(createGroupResponse.tag === 'CreateGroupErr')
-	assert(createGroupResponse.value.message === 'Insufficient Permissions')
-
-	createGroupResponse = await CreateGroupCommand({
-		tag: 'CreateGroupCommand',
-		value: {
-			group_name: 'developers',
-			organization_name: 'harth',
-			token: JAForbes_server_enc_jwt,
-			users: {
-				add: await state.postgres`
-					select user_id from zecret.user
-					where github_user_id in ('jbravoe', 'jaforbes')
-				`.then((xs) => xs.map((x) => x.user_id as string))
-			}
-		}
-	})
-	assert(createGroupResponse.tag === 'CreateGroupOk')
+	assert(manageOrgResponse.tag === 'ManageOrganizationErr')
+	assert(manageOrgResponse.value.message === 'Insufficient Permissions')
 
 	let listGroupResponse = await ListGroupCommand({
 		tag: 'ListGroupCommand',
