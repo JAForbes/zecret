@@ -1,4 +1,4 @@
-export const name = "Initial Schema"
+export const name = 'Initial Schema'
 
 export const teardown = async (sql) => {
 	await sql`
@@ -125,6 +125,23 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		create table zecret.org_admin(
+			organization_name public.citext not null
+				references zecret.org(organization_name)
+				on update cascade
+				on delete cascade
+				deferrable initially deferred
+			,user_id uuid not null
+				references zecret.user(user_id)
+				on update cascade
+				on delete cascade
+				deferrable initially deferred
+			, primary key (organization_name, user_id)
+			, like zecret.meta including defaults
+		)
+	`
+
+	await sql`
 		create table zecret.group_user(
 			group_name public.citext not null
 			, organization_name public.citext not null
@@ -151,7 +168,7 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
-		insert into zecret.grant_level (grant_level) values ('read'), ('write'), ('grant');
+		insert into zecret.grant_level (grant_level) values ('read'), ('write');
 	`
 
 	await sql`
@@ -231,15 +248,16 @@ export const action = async (sql, { roles }) => {
 		grant select on zecret.grant_level to ${service}
 	`
 	for (let [table, grants] of [
-		["zecret.user", "select, insert, update"],
-		["zecret.org", "select, insert, update"],
-		["zecret.group", "select, insert, update"],
-		["zecret.org_user", "select, insert, update"],
-		["zecret.group_user", "select, insert, update"],
-		["zecret.grant_user", "select, insert, update"],
-		["zecret.grant_group", "select, insert, update"],
-		["zecret.secret", "select, insert, update"],
-		["zecret.server_public_key", ["select, insert, update"]]
+		['zecret.user', 'select, insert, update'],
+		['zecret.org', 'select, insert, update'],
+		['zecret.group', 'select, insert, update, delete'],
+		['zecret.org_user', 'select, insert, update, delete'],
+		['zecret.org_admin', 'select, insert, update, delete'],
+		['zecret.group_user', 'select, insert, update, delete'],
+		['zecret.grant_user', 'select, insert, update, delete'],
+		['zecret.grant_group', 'select, insert, update, delete'],
+		['zecret.secret', 'select, insert, update'],
+		['zecret.server_public_key', 'select, insert, update']
 	]) {
 		await sql`
 			alter table ${sql(table)} 

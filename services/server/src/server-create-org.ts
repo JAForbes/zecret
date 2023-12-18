@@ -1,21 +1,21 @@
-import assert from "assert"
-import { DecodedToken, UpsertSecret } from "./types.js"
-import { parseJwt, serverDecrypt, tokenBoilerPlate } from "./util.js"
-import { state } from "./server-state.js"
+import assert from 'assert'
+import { DecodedToken, UpsertSecret } from './types.js'
+import { parseJwt, serverDecrypt, tokenBoilerPlate } from './util.js'
+import { state } from './server-state.js'
 
 type CreateOrgCommand = {
-	tag: "CreateOrgCommand"
+	tag: 'CreateOrgCommand'
 	value: {
 		organization_name: string
 		token: string
 	}
 }
 type CreateOrgOk = {
-	tag: "CreateOrgOk"
+	tag: 'CreateOrgOk'
 	value: {}
 }
 type CreateOrgErr = {
-	tag: "CreateOrgErr"
+	tag: 'CreateOrgErr'
 	value: {
 		message: string
 	}
@@ -26,7 +26,7 @@ export default async function CreateOrgCommand(
 	command: CreateOrgCommand
 ): Promise<CreateOrgResponse> {
 	const [error, data] = await tokenBoilerPlate(
-		(message) => ({ tag: "CreateOrgErr", value: { message } } as CreateOrgErr),
+		(message) => ({ tag: 'CreateOrgErr', value: { message } } as CreateOrgErr),
 		command.value.token
 	)
 	if (error) {
@@ -47,6 +47,12 @@ export default async function CreateOrgCommand(
 				on conflict (organization_name) do nothing
 			`
 
+			await sql`
+				insert into zecret.org_user(organization_name, user_id)
+				values (${command.value.organization_name}, zecret.get_active_user())
+				on conflict do nothing
+			`
+
 			if (createResult.count == 0) {
 				const [{ is_owner }] = await sql`
 					select primary_owner_id = zecret.get_active_user() as is_owner
@@ -55,29 +61,29 @@ export default async function CreateOrgCommand(
 				`.catch(() => [{ is_owner: false }])
 				if (is_owner) {
 					return {
-						tag: "CreateOrgOk",
+						tag: 'CreateOrgOk',
 						value: {}
 					} as CreateOrgOk
 				}
 				return {
-					tag: "CreateOrgErr",
+					tag: 'CreateOrgErr',
 					value: {
-						message: "Organization could not be created, it may already exist"
+						message: 'Organization could not be created, it may already exist'
 					}
 				} as CreateOrgErr
 			}
 
 			return {
-				tag: "CreateOrgOk",
+				tag: 'CreateOrgOk',
 				value: {}
 			} as CreateOrgOk
 		})
 		.catch((err) => {
 			console.error(err)
 			return {
-				tag: "CreateOrgErr",
+				tag: 'CreateOrgErr',
 				value: {
-					message: "Unknown Error"
+					message: 'Unknown Error'
 				}
 			} as CreateOrgErr
 		})
