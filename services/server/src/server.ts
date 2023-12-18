@@ -2,11 +2,9 @@ import assert from 'node:assert'
 import * as fs from 'node:fs/promises'
 
 import {
-	decryptWithBufferPrivateKey,
 	decryptWithGithubPrivateKey,
 	decryptWithSecret,
 	encryptWithBufferPublicKey,
-	encryptWithGithubPublicKey,
 	encryptWithSecret,
 	parseJwt
 } from './util.js'
@@ -15,7 +13,7 @@ import { InitializeStoreCommand } from './server-initialize.js'
 import { state } from './server-state.js'
 import { WhoAmICommand } from './server-whoami.js'
 import RefreshTokenCommand from './server-token-refresh.js'
-import UpsertSecretsCommand from './server-upsert-secrets.js'
+import ManageSecretsCommand from './server-manage-secrets.js'
 import RequestSecretsCommand from './server-request-secrets.js'
 import ManageOrganizationCommand from './server-manage-organization.js'
 import ListGroupCommand from './server-list-groups.js'
@@ -146,11 +144,12 @@ export default async function server(argv: any & { _: string[] }) {
 
 	assert(manageOrgResponse.tag === 'ManageOrganizationOk')
 
-	let upsertSecretsResponse = await UpsertSecretsCommand({
-		tag: 'UpsertSecretsCommand',
+	let manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
 		value: {
 			token: server_enc_jwt,
-			secrets: [
+			remove: [],
+			add: [
 				{
 					organization_name: 'harth',
 					key: 'DATABASE_URL',
@@ -191,7 +190,7 @@ export default async function server(argv: any & { _: string[] }) {
 		}
 	})
 
-	assert.equal(upsertSecretsResponse.tag, 'UpsertSecretsOk')
+	assert.equal(manageSecretsResponse.tag, 'ManageSecretsOk')
 
 	let cliRequestSecretsResponse = await RequestSecretsCommand({
 		tag: 'RequestSecretsCommand',
@@ -383,11 +382,12 @@ export default async function server(argv: any & { _: string[] }) {
 				(x) => x.path.startsWith('/odin/') || x.path.startsWith('/dropoff/')
 			)
 	)
-	upsertSecretsResponse = await UpsertSecretsCommand({
-		tag: 'UpsertSecretsCommand',
+	manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
 		value: {
 			token: JBravoe_server_enc_jwt,
-			secrets: [
+			remove: [],
+			add: [
 				{
 					organization_name: 'harth',
 					key: 'DATABASE_URL',
@@ -400,12 +400,13 @@ export default async function server(argv: any & { _: string[] }) {
 			]
 		}
 	})
-	assert(upsertSecretsResponse.tag === 'UpsertSecretsOk')
-	upsertSecretsResponse = await UpsertSecretsCommand({
-		tag: 'UpsertSecretsCommand',
+	assert(manageSecretsResponse.tag === 'ManageSecretsOk')
+	manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
 		value: {
 			token: JBravoe_server_enc_jwt,
-			secrets: [
+			remove: [],
+			add: [
 				{
 					organization_name: 'harth',
 					key: 'DATABASE_URL',
@@ -419,14 +420,15 @@ export default async function server(argv: any & { _: string[] }) {
 		}
 	})
 	assert(
-		upsertSecretsResponse.tag === 'UpsertSecretsErr',
+		manageSecretsResponse.tag === 'ManageSecretsErr',
 		'Cannot upsert with read access'
 	)
-	upsertSecretsResponse = await UpsertSecretsCommand({
-		tag: 'UpsertSecretsCommand',
+	manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
 		value: {
 			token: JBravoe_server_enc_jwt,
-			secrets: [
+			remove: [],
+			add: [
 				{
 					organization_name: 'harth',
 					key: 'DATABASE_URL',
@@ -440,7 +442,7 @@ export default async function server(argv: any & { _: string[] }) {
 		}
 	})
 	assert(
-		upsertSecretsResponse.tag === 'UpsertSecretsErr',
+		manageSecretsResponse.tag === 'ManageSecretsErr',
 		'Cannot upsert with no access'
 	)
 	manageOrgResponse = await ManageOrganizationCommand({
@@ -475,11 +477,12 @@ export default async function server(argv: any & { _: string[] }) {
 			}
 		}
 	})
-	upsertSecretsResponse = await UpsertSecretsCommand({
-		tag: 'UpsertSecretsCommand',
+	manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
 		value: {
 			token: JBravoe_server_enc_jwt,
-			secrets: [
+			remove: [],
+			add: [
 				{
 					organization_name: 'harth',
 					key: 'DATABASE_URL',
@@ -492,6 +495,21 @@ export default async function server(argv: any & { _: string[] }) {
 			]
 		}
 	})
-	assert(upsertSecretsResponse.tag === 'UpsertSecretsOk')
+	assert(manageSecretsResponse.tag === 'ManageSecretsOk')
+	manageSecretsResponse = await ManageSecretsCommand({
+		tag: 'ManageSecretsCommand',
+		value: {
+			token: JBravoe_server_enc_jwt,
+			add: [],
+			remove: [
+				{
+					organization_name: 'harth',
+					key: 'DATABASE_URL',
+					path: '/dropoff/api'
+				}
+			]
+		}
+	})
+	assert(manageSecretsResponse.tag === 'ManageSecretsOk')
 	console.log('ok')
 }

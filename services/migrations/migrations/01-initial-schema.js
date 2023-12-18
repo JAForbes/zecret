@@ -256,7 +256,7 @@ export const action = async (sql, { roles }) => {
 		['zecret.group_user', 'select, insert, update, delete'],
 		['zecret.grant_user', 'select, insert, update, delete'],
 		['zecret.grant_group', 'select, insert, update, delete'],
-		['zecret.secret', 'select, insert, update'],
+		['zecret.secret', 'select, insert, update, delete'],
 		['zecret.server_public_key', 'select, insert, update']
 	]) {
 		await sql`

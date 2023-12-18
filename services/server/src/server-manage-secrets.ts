@@ -1,57 +1,74 @@
-import assert from "assert"
-import { DecodedToken, UpsertSecret } from "./types.js"
-import randomString from "crypto-random-string"
+import assert from 'assert'
+import randomString from 'crypto-random-string'
 import {
 	decryptWithSecret,
 	encryptWithBufferPublicKey,
 	encryptWithSecret,
-	parseJwt,
-	serverDecrypt,
 	tokenBoilerPlate
-} from "./util.js"
-import { state } from "./server-state.js"
+} from './util.js'
+import { state } from './server-state.js'
 
-type UpsertSecretsCommand = {
-	tag: "UpsertSecretsCommand"
+export type EncryptedWithSecret = {
+	iv: string
+	cipher_text: string
+}
+
+export type AddSecretPayload = {
+	organization_name: string
+	path: string
+	key: string
+	value: EncryptedWithSecret
+}
+
+export type RemoveSecretPayload = {
+	organization_name: string
+	path: string
+	key: string
+}
+
+type ManageSecretsCommand = {
+	tag: 'ManageSecretsCommand'
 	value: {
-		secrets: UpsertSecret[]
+		add: AddSecretPayload[]
+		remove: RemoveSecretPayload[]
 		token: string
 	}
 }
-type UpsertSecretsOk = {
-	tag: "UpsertSecretsOk"
+type ManageSecretsOk = {
+	tag: 'ManageSecretsOk'
 	value: {}
 }
-type UpsertSecretsErr = {
-	tag: "UpsertSecretsErr"
+type ManageSecretsErr = {
+	tag: 'ManageSecretsErr'
 	value: {
 		message: string
 	}
 }
-type UpsertSecretsResponse = UpsertSecretsOk | UpsertSecretsErr
+type ManageSecretsResponse = ManageSecretsOk | ManageSecretsErr
 
-export default async function UpsertSecretsCommand(
-	command: UpsertSecretsCommand
-): Promise<UpsertSecretsResponse> {
-	assert(state.state !== "idle")
+export default async function ManageSecretsCommand(
+	command: ManageSecretsCommand
+): Promise<ManageSecretsResponse> {
+	assert(state.state !== 'idle')
 
-	if (command.value.secrets.length === 0) {
+	if (command.value.add.length + command.value.remove.length === 0) {
 		return {
-			tag: "UpsertSecretsErr",
+			tag: 'ManageSecretsErr',
 			value: {
-				message: "You must specify a non empty secrets array"
+				message:
+					'You must specify at least one non empty secrets array for { add, remove }'
 			}
-		} as UpsertSecretsResponse
+		} as ManageSecretsResponse
 	}
 
 	const [error, data] = await tokenBoilerPlate(
 		(message) =>
 			({
-				tag: "UpsertSecretsErr",
+				tag: 'ManageSecretsErr',
 				value: {
 					message
 				}
-			} as UpsertSecretsResponse),
+			} as ManageSecretsResponse),
 		command.value.token
 	)
 	if (error) {
@@ -93,7 +110,7 @@ export default async function UpsertSecretsCommand(
 			// to encrypt the user's value
 			const symmetric_secret = randomString({
 				length: 32,
-				type: "alphanumeric"
+				type: 'alphanumeric'
 			})
 
 			// we encrypt a copy once per server key pair
@@ -109,7 +126,7 @@ export default async function UpsertSecretsCommand(
 						public_key
 					)
 
-					return command.value.secrets.map((x) => {
+					return command.value.add.map((x) => {
 						// We first decrypt the secret the user sent
 						// using their JWT shared secret.
 						//
@@ -129,43 +146,54 @@ export default async function UpsertSecretsCommand(
 				}
 			)
 
-			await sql`
-				insert into zecret.secret ${sql(
-					inputs,
-					"organization_name",
-					"path",
-					"key",
-					"value",
-					"iv",
-					"server_public_key_id",
-					"symmetric_secret"
+			if (command.value.add.length) {
+				await sql`
+					insert into zecret.secret ${sql(
+						inputs,
+						'organization_name',
+						'path',
+						'key',
+						'value',
+						'iv',
+						'server_public_key_id',
+						'symmetric_secret'
+					)}
+	
+	
+					on conflict (organization_name, path, key, server_public_key_id)
+					do update set
+						value = excluded.value
+						,iv = excluded.iv
+						,symmetric_secret = excluded.symmetric_secret
+						,server_public_key_id = excluded.server_public_key_id
+						,updated_at = now()
+				`
+			}
+
+			const deletedResponse = await sql`
+				delete from zecret.secret S
+				where (S.organization_name, S.path, S.key) in ${sql(
+					command.value.remove.map((remove) =>
+						sql([remove.organization_name, remove.path, remove.key])
+					)
 				)}
-
-
-				on conflict (organization_name, path, key, server_public_key_id)
-				do update set
-					value = excluded.value
-					,iv = excluded.iv
-					,symmetric_secret = excluded.symmetric_secret
-					,server_public_key_id = excluded.server_public_key_id
-					,updated_at = now()
 			`
 		})
 		.then(() => {
 			return {
-				tag: "UpsertSecretsOk",
+				tag: 'ManageSecretsOk',
 				value: {}
-			} as UpsertSecretsResponse
+			} as ManageSecretsResponse
 		})
 		.catch((err) => {
 			console.error(err)
 			return {
-				tag: "UpsertSecretsErr",
+				tag: 'ManageSecretsErr',
 				value: {
-					message: err.message.includes("violates row-level security policy")
-						? "Insufficient Permissions"
-						: "Unknown Error"
+					message: err.message.includes('violates row-level security policy')
+						? 'Insufficient Permissions'
+						: 'Unknown Error'
 				}
-			} as UpsertSecretsResponse
+			} as ManageSecretsResponse
 		})
 }

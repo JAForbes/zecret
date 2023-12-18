@@ -392,6 +392,19 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		create policy api_delete_secret on zecret.secret
+		for delete
+		to ${service}
+		using (
+			zecret.has_write_permission_at_path(
+				organization_name
+				, zecret.get_active_user()
+				, path
+			)
+		)
+	`
+
+	await sql`
 		create policy api_insert_grant_user on zecret.grant_user
 		for insert
 		to ${service}
