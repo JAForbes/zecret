@@ -192,7 +192,7 @@ export default async function ManageOrganizationCommand(
 			// of complexity, so we just create an internal user for every mention of a github user
 			// So let's do that right now
 
-			{
+			setup_gh_users: {
 				const grantUserIds = [...grants.add, ...grants.remove]
 					.flatMap((x) => (x.tag === 'GithubUserGrant' ? [x] : []))
 					.map((x) => x.github_user_id)
@@ -203,7 +203,9 @@ export default async function ManageOrganizationCommand(
 
 				const uniq = [...new Set([...grantUserIds, ...groupUserIds])]
 
-				console.log('uniq', uniq)
+				if (uniq.length == 0) {
+					break setup_gh_users
+				}
 				const usersRes = await sql`
 					insert into zecret.user(github_user_id)
 					values ${sql(uniq)}
@@ -366,6 +368,17 @@ export default async function ManageOrganizationCommand(
 					on conflict do nothing
 				`
 			}
+
+			await sql`
+				delete from zecret.grant_group G
+				where (G.organization_name, G.path, G.grant_level, G.group_name) in ${sql(
+					grants.remove.flatMap((o) =>
+						o.tag === 'GroupGrant'
+							? [sql([organization_name, o.path, o.grant_level, o.group_name])]
+							: []
+					)
+				)}
+			`
 
 			// and now group grants
 			await sql`

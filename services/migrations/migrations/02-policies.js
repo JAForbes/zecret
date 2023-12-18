@@ -425,6 +425,54 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		create policy api_delete_grant_group on zecret.grant_group
+		for delete
+		to ${service}
+		using (
+			zecret.user_is_admin(
+				organization_name
+				, zecret.get_active_user()
+			)
+		)
+	`
+
+	await sql`
+		create policy api_update_grant_group on zecret.grant_group
+		for update
+		to ${service}
+		using (
+			zecret.user_is_admin(
+				organization_name
+				, zecret.get_active_user()
+			)
+		)
+	`
+
+	await sql`
+		create policy api_delete_grant_user on zecret.grant_user
+		for delete
+		to ${service}
+		using (
+			zecret.user_is_admin(
+				organization_name
+				, zecret.get_active_user()
+			)
+		)
+	`
+
+	await sql`
+		create policy api_update_grant_user on zecret.grant_user
+		for update
+		to ${service}
+		using (
+			zecret.user_is_admin(
+				organization_name
+				, zecret.get_active_user()
+			)
+		)
+	`
+
+	await sql`
 		create policy api_select_secret on zecret.secret
 		for select
 		to ${service}

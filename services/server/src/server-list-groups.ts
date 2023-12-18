@@ -48,8 +48,9 @@ export default async function ListGroupCommand(
 			const groups = await sql<Group[]>`
 				select G.*, array_agg(GU.user_id) as users
 				from zecret.group G
-				inner join zecret.group_user using (organization_name, group_name)
+				inner join zecret.group_user GU using (organization_name, group_name)
 				where organization_name = ${command.value.organization_name}
+				group by G.organization_name, G.group_name
 			`
 			return {
 				tag: 'ListGroupOk',
