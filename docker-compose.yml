@@ -28,7 +28,9 @@ services:
       - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
 
     depends_on:
-      - postgres
+      postgres: 
+        condition: service_healthy
+
 
   server:
     build: ./services/server
@@ -42,6 +44,23 @@ services:
     tty: true
     # exit node from SIGINT
     init: true
+
+  server-tests:
+    build: ./services/server
+    command: bash -c 'npm install && npm run test'
+    working_dir: $PWD/services/server
+    user: node
+    volumes:
+      - $PWD:$PWD
+      - $HOME/.ssh:$HOME/.ssh
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+    depends_on:
+      migrations: 
+        condition: service_healthy
+    restart: 'no'
 
   cli:
     build: ./services/cli
