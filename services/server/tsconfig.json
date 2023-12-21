@@ -3,7 +3,8 @@
 		"esModuleInterop": true,
 		"allowSyntheticDefaultImports": true,
 		"strict": true,
-		"module": "NodeNext",
+		"module": "ESNext",
+		"moduleResolution": "node"
 	},
 	"typeAcquisition": {
 		"enable": true

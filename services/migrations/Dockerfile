@@ -17,7 +17,6 @@ HEALTHCHECK --interval=5s --timeout=1s CMD stat health-check.txt
 
 CMD ["npx", "nodemon", "-L", "--watch", "./migrations/*.js","--watch", "./migrations/**/*.js", "--exec", "$(npm bin)/pgmg", "$DATABASE_URL", "migrations/*.js", "--dev", "--health-check-file", "./health-check.txt"]
 
-
 FROM base as prod
 
 CMD ["sh", "-c", "npx pgmg \"$DATABASE_URL\" migrations/*.js"]
