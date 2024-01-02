@@ -32,7 +32,7 @@ export default async function server(argv: any & { _: string[] }) {
 					'utf-8'
 				)
 			},
-			database_url: 'postgres://zecret_api:password@postgres:5432/postgres',
+			database_url: process.env.DATABASE_URL as string,
 			token_secret: 'secret'
 		}
 	})

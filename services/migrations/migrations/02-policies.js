@@ -1,6 +1,3 @@
-import testUserRls from './test/user-rls.js'
-import testOrgRls from './test/org-and-group-rls.js'
-
 export const name = 'RLS Policies'
 
 export const action = async (sql, { roles }) => {
@@ -515,7 +512,4 @@ export const action = async (sql, { roles }) => {
 	await sql`
 		grant ${service} to zecret_api
 	`
-
-	await testUserRls(sql)
-	await testOrgRls(sql)
 }

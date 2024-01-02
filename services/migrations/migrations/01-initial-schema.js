@@ -59,7 +59,11 @@ export const action = async (sql, { roles }) => {
 	await sql`
 		create table zecret.org(
 				organization_name public.citext primary key
-				,primary_owner_id uuid not null references zecret.user(user_id) default zecret.get_active_user()
+				,primary_owner_id uuid not null 
+					references zecret.user(user_id) 
+						on delete cascade
+							deferrable initially deferred
+					default zecret.get_active_user()
 				,like zecret.meta including defaults
 		);
 	`
@@ -97,11 +101,11 @@ export const action = async (sql, { roles }) => {
 		create table zecret.group(
 				group_name public.citext not null
 				,organization_name public.citext
-						not null
-						references zecret.org(organization_name)
-						on update cascade
+					not null
+					references zecret.org(organization_name)
 						on delete cascade
-						deferrable initially deferred
+						on update cascade
+							deferrable initially deferred
 				, primary key (group_name, organization_name)
 				, like zecret.meta including defaults
 		);
@@ -113,7 +117,7 @@ export const action = async (sql, { roles }) => {
 				references zecret.org(organization_name)
 				on update cascade
 				on delete cascade
-				deferrable initially deferred
+					deferrable initially deferred
 			,user_id uuid not null
 				references zecret.user(user_id)
 				on update cascade
@@ -146,6 +150,8 @@ export const action = async (sql, { roles }) => {
 			group_name public.citext not null
 			, organization_name public.citext not null
 			, user_id uuid references zecret.user(user_id)
+					on delete cascade
+					deferrable initially deferred
 			, primary key (group_name, user_id)
 			, like zecret.meta including defaults
 			, constraint fk_org_and_group foreign key(organization_name, group_name)
@@ -155,8 +161,8 @@ export const action = async (sql, { roles }) => {
 				deferrable initially deferred
 			, constraint fk_org_and_user foreign key(organization_name, user_id)
 				references zecret.org_user(organization_name, user_id)
-				on update cascade
-				on delete cascade
+					on update cascade
+					on delete cascade
 				deferrable initially deferred
 		);
 	`
@@ -178,15 +184,17 @@ export const action = async (sql, { roles }) => {
 			, user_id uuid null
 			, grant_level public.citext not null
 				references zecret.grant_level(grant_level)
+					on delete cascade
+					deferrable initially deferred
 			, like zecret.meta including defaults
 
 			, primary key (organization_name, path, grant_level, user_id)
 
 			, constraint fk_org_and_user foreign key(organization_name, user_id)
 				references zecret.org_user(organization_name, user_id)
-				on update cascade
-				on delete cascade
-				deferrable initially deferred
+					on delete cascade
+					on update cascade
+					deferrable initially deferred
 		);
 	`
 
@@ -197,15 +205,17 @@ export const action = async (sql, { roles }) => {
 			, group_name public.citext null
 			, grant_level public.citext not null
 				references zecret.grant_level(grant_level)
+					on delete cascade
+					deferrable initially deferred
 			, like zecret.meta including defaults
 
 			, primary key (organization_name, path, grant_level, group_name)
 
 			, constraint fk_org_and_group foreign key(organization_name, group_name)
 				references zecret.group(organization_name, group_name)
-				on update cascade
-				on delete cascade
-				deferrable initially deferred
+					on delete cascade
+					on update cascade
+						deferrable initially deferred
 		);
 	`
 
@@ -231,14 +241,17 @@ export const action = async (sql, { roles }) => {
 			path public.citext not null
 			, organization_name public.citext not null
 				references zecret.org(organization_name)
-				on update cascade
-				on delete cascade
-				deferrable initially deferred
+					on delete cascade
+					on update cascade
+						deferrable initially deferred
 			, key public.citext not null
 			, value text not null
 			, iv text not null
 			, symmetric_secret text not null
-			, server_public_key_id text not null references zecret.server_public_key(server_public_key_id)
+			, server_public_key_id text not null 
+					references zecret.server_public_key(server_public_key_id)
+						on delete cascade
+							deferrable initially deferred
 			, primary key (organization_name, path, key, server_public_key_id)
 			, like zecret.meta including defaults
 		);
