@@ -16,7 +16,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:13.4
+        image: postgres:14
         env:
           POSTGRES_DB: zecret
           POSTGRES_USER: postgres
