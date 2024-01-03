@@ -5,6 +5,7 @@ services:
     user: root
     ports:
       - 5435:5432
+    user: root
     environment:
       PGDATA: /var/lib/pg_data
       POSTGRES_PASSWORD: password
