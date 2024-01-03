@@ -9,18 +9,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgres://zecret_api:password@postgres:5432/postgres
-      TEST_DATABASE_URL: postgres://postgres:password@postgres:5432/postgres
+      POSTGRES_DB: zecret
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
 
-    # Service containers to run with `container-job`
     services:
-      # Label used to access the service container
       postgres:
-        # Docker Hub image
-        image: timescale/timescaledb-ha:pg15-all
-        # Provide the password for postgres
+        image: postgres:13.4
         env:
-          PGDATA: /var/lib/pg_data
+          POSTGRES_DB: zecret
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
           POSTGRES_HOST_AUTH_METHOD: trust
         # Set health checks to wait until postgres has started
