@@ -186,13 +186,14 @@ export default async function ManageSecretsCommand(
 			} as ManageSecretsResponse
 		})
 		.catch((err) => {
-			console.error(err)
+			const expectedErr = err.message.includes(
+				'violates row-level security policy'
+			)
+			expectedErr || console.error(err)
 			return {
 				tag: 'ManageSecretsErr',
 				value: {
-					message: err.message.includes('violates row-level security policy')
-						? 'Insufficient Permissions'
-						: 'Unknown Error'
+					message: expectedErr ? 'Insufficient Permissions' : 'Unknown Error'
 				}
 			} as ManageSecretsResponse
 		})

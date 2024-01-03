@@ -1,15 +1,16 @@
-import sshpk from "sshpk"
-import crypto from "node:crypto"
-import assert from "assert"
-import jsonwebtoken, { TokenExpiredError } from "jsonwebtoken"
-import { ActiveState, state } from "./server-state.js"
-import { DecodedToken, EncryptedWithSecret } from "./types.js"
-import RefreshTokenCommand from "./server-token-refresh.js"
+import sshpk from 'sshpk'
+import crypto from 'node:crypto'
+import assert from 'assert'
+import jsonwebtoken from 'jsonwebtoken'
+import { ActiveState, state } from './server-state.js'
+import { DecodedToken } from './types.js'
+import RefreshTokenCommand from './server-token-refresh.js'
+import { EncryptedWithSecret } from './server-manage-secrets.js'
 
 export const handleFetchFailure = async (x: Response): Promise<Response> => {
 	if (!x.ok) {
 		let err = new Error(
-			x.status + ": " + (await x.text().catch(() => "Unknown exception"))
+			x.status + ': ' + (await x.text().catch(() => 'Unknown exception'))
 		)
 		;(err as any).status = x.status
 		throw err
@@ -22,11 +23,11 @@ export function encryptWithBufferPublicKey(
 	publicKeyX509: Buffer
 ): string {
 	const cipherText = crypto.publicEncrypt(
-		publicKeyX509.toString("utf8") as string,
+		publicKeyX509.toString('utf8') as string,
 		message as any
 	)
 
-	return cipherText.toString("base64")
+	return cipherText.toString('base64')
 }
 
 export function decryptWithBufferPrivateKey(
@@ -34,44 +35,44 @@ export function decryptWithBufferPrivateKey(
 	privateKeyPkcs8: Buffer
 ): string {
 	const decryptedBuffer = crypto.privateDecrypt(
-		privateKeyPkcs8.toString("utf8"),
-		Buffer.from(cipher_text_base64, "base64")
+		privateKeyPkcs8.toString('utf8'),
+		Buffer.from(cipher_text_base64, 'base64')
 	)
 
-	return decryptedBuffer.toString("utf8")
+	return decryptedBuffer.toString('utf8')
 }
 
 export function encryptWithGithubPublicKey(
 	message: string,
 	ghPublicKey: string
 ): string {
-	const publicKey = sshpk.parseKey(ghPublicKey, "ssh")
-	const publicKeyX509 = publicKey.toBuffer("pkcs8")
+	const publicKey = sshpk.parseKey(ghPublicKey, 'ssh')
+	const publicKeyX509 = publicKey.toBuffer('pkcs8')
 
 	const cipherText = crypto.publicEncrypt(
-		publicKeyX509.toString("utf8") as string,
+		publicKeyX509.toString('utf8') as string,
 		message as any
 	)
 
-	return cipherText.toString("base64")
+	return cipherText.toString('base64')
 }
 
 export function decryptWithGithubPrivateKey(
 	cipher_text_base64: string,
 	ghPrivateKey: string
 ): string {
-	const privateKey = sshpk.parsePrivateKey(ghPrivateKey, "ssh")
-	const privateKeyPkcs8 = privateKey.toBuffer("pkcs8")
+	const privateKey = sshpk.parsePrivateKey(ghPrivateKey, 'ssh')
+	const privateKeyPkcs8 = privateKey.toBuffer('pkcs8')
 	const decryptedBuffer = crypto.privateDecrypt(
-		privateKeyPkcs8.toString("utf8"),
-		Buffer.from(cipher_text_base64, "base64")
+		privateKeyPkcs8.toString('utf8'),
+		Buffer.from(cipher_text_base64, 'base64')
 	)
 
-	return decryptedBuffer.toString("utf8")
+	return decryptedBuffer.toString('utf8')
 }
 
 export function serverDecrypt(message: string) {
-	assert(state.state !== "idle")
+	assert(state.state !== 'idle')
 
 	let decryptError = null
 	let decryptedMessage: string | null = null
@@ -96,28 +97,34 @@ export async function parseJwt(
 	options: { autoRefresh: boolean }
 ) {
 	let parsedJwt: DecodedToken | null = null
-	assert(state.state !== "idle")
+	assert(state.state !== 'idle')
 
 	parseToken: {
-		let message = "Token could not be verified"
+		let message = 'Token could not be verified'
 		try {
-			parsedJwt = jsonwebtoken.verify(token, state.token_secret)
+			parsedJwt = jsonwebtoken.verify(token, state.token_secret) as DecodedToken
 			break parseToken
 		} catch (err) {
-			if (options.autoRefresh && err instanceof TokenExpiredError) {
+			if (
+				options.autoRefresh &&
+				err instanceof jsonwebtoken.TokenExpiredError
+			) {
 				try {
 					const res = await RefreshTokenCommand({
-						tag: "RefreshTokenCommand",
+						tag: 'RefreshTokenCommand',
 						value: {
 							token
 						}
 					})
-					if (res.tag === "RefreshTokenErr") {
-						message = "Token expired and could not be refreshed"
+					if (res.tag === 'RefreshTokenErr') {
+						message = 'Token expired and could not be refreshed'
 					} else {
 						token = res.value.token
 						try {
-							parsedJwt = jsonwebtoken.verify(token, state.token_secret)
+							parsedJwt = jsonwebtoken.verify(
+								token,
+								state.token_secret
+							) as DecodedToken
 							break parseToken
 						} catch (err2) {
 							err = err2
@@ -142,10 +149,10 @@ export function encryptWithSecret(
 ): EncryptedWithSecret {
 	let iv = crypto.randomBytes(16)
 	let key = Buffer.from(secret)
-	let cipher = crypto.createCipheriv("aes-256-cbc", key, iv)
-	let encrypted = cipher.update(message, "utf-8", "hex") + cipher.final("hex")
+	let cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
+	let encrypted = cipher.update(message, 'utf-8', 'hex') + cipher.final('hex')
 	return {
-		iv: iv.toString("hex"),
+		iv: iv.toString('hex'),
 		cipher_text: encrypted
 	}
 }
@@ -153,13 +160,13 @@ export function decryptWithSecret(
 	message: { iv: string; cipher_text: string },
 	secret: string
 ): string {
-	let iv = Buffer.from(message.iv, "hex")
+	let iv = Buffer.from(message.iv, 'hex')
 	let key = Buffer.from(secret)
-	const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv)
+	const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
 
 	let decrypted =
-		decipher.update(message.cipher_text, "hex", "utf-8") +
-		decipher.final("utf8")
+		decipher.update(message.cipher_text, 'hex', 'utf-8') +
+		decipher.final('utf8')
 
 	return decrypted
 }
@@ -170,8 +177,8 @@ export async function tokenBoilerPlate<ErrorType>(
 ): Promise<
 	[ErrorType, null] | [null, { decoded: DecodedToken; state: ActiveState }]
 > {
-	if (state.state === "idle") {
-		return [onError("Server has not yet initialized"), null]
+	if (state.state === 'idle') {
+		return [onError('Server has not yet initialized'), null]
 	}
 
 	let token: string | null = null
@@ -179,7 +186,7 @@ export async function tokenBoilerPlate<ErrorType>(
 		token = serverDecrypt(unsafeToken)
 	} catch (err) {
 		return [
-			onError("Token could not be decrypted with server public key"),
+			onError('Token could not be decrypted with server public key'),
 			null
 		]
 	}
@@ -190,7 +197,7 @@ export async function tokenBoilerPlate<ErrorType>(
 	try {
 		parsedJwt = await parseJwt(token, { autoRefresh: true })
 	} catch (e) {
-		return [onError(e instanceof Error ? e.message : "Unknown Failure"), null]
+		return [onError(e instanceof Error ? e.message : 'Unknown Failure'), null]
 	}
 	assert(parsedJwt != null)
 	return [null, { decoded: parsedJwt, state }]

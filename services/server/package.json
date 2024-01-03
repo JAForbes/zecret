@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "npx tsx --test test/*.ts",
-		"test-watch": "npx tsx --watch --test test/*.ts"
+		"#test-watch": "tsx --watch was creating pipe errors, so we use NODE_OPTIONS instead",
+		"test-watch": "NODE_OPTIONS='--import tsx' node --watch --test-concurrency 1 --test test/*.ts"
   },
   "keywords": [],
   "author": "",

@@ -130,7 +130,7 @@ test('RLS: org and group', async (t) => {
 
 	await begin(async (sql) => {
 		await sql`select zecret.set_active_user(${users.JAForbes})`
-		await sql`insert into zecret.org (organization_name) values ('harth')`
+		await sql`insert into zecret.org (organization_name) values ('harth') on conflict do nothing`
 	})
 
 	const JAForbes = asUser('JAForbes')
@@ -151,7 +151,9 @@ test('RLS: org and group', async (t) => {
 	await JAForbes(async (sql) => {
 		await sql`
 			insert into zecret.group(organization_name, group_name)
-			values ('harth', 'developers');
+			values ('harth', 'developers')
+			on conflict do nothing
+			;
 		`
 	})
 
@@ -159,9 +161,10 @@ test('RLS: org and group', async (t) => {
 		() =>
 			JAForbes(
 				(sql) => sql`
-			insert into zecret.group_user(organization_name, group_name, user_id)
-			values ('harth', 'developers', ${users.JBravoe})
-		`
+					insert into zecret.group_user(organization_name, group_name, user_id)
+					values ('harth', 'developers', ${users.JBravoe})
+					on conflict do nothing
+				`
 			),
 		/new row violates row-level security policy for table "group_user"/
 	)
@@ -170,10 +173,12 @@ test('RLS: org and group', async (t) => {
 		await sql`
 			insert into zecret.org_user(organization_name, user_id)
 			values ('harth', ${users.JBravoe})
+			on conflict do nothing
 		`
 		await sql`
 			insert into zecret.group_user(organization_name, group_name, user_id)
 			values ('harth', 'developers', ${users.JBravoe})
+			on conflict do nothing
 		`
 		// in practice values will be encrypted, but that is outside of
 		// postgres' purview
@@ -181,6 +186,7 @@ test('RLS: org and group', async (t) => {
 		await sql`
 			insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 				values ('harth', '/odin/zip', 'DATABASE_URL', 'postgres://zip:password@postgres:5432/postgres', '','', ${server_public_key_id})
+			on conflict do nothing
 		`
 	})
 
@@ -190,6 +196,7 @@ test('RLS: org and group', async (t) => {
 				(sql) => sql`
 				insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 					values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '','', ${server_public_key_id})
+				on conflict do nothing
 			`
 			),
 		/new row violates row-level security policy for table "secret"/
@@ -204,6 +211,7 @@ test('RLS: org and group', async (t) => {
 			values (
 				'harth', 'developers', '/odin', 'write'
 			)
+			on conflict do nothing
 		`
 	)
 
@@ -213,6 +221,7 @@ test('RLS: org and group', async (t) => {
 			sql`
 			insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 			values ('harth', '/odin/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '','', ${server_public_key_id})
+			on conflict do nothing
 		`
 	)
 
@@ -223,6 +232,7 @@ test('RLS: org and group', async (t) => {
 				(sql) => sql`
 					insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 						values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '','', ${server_public_key_id})
+						on conflict do nothing
 				`
 			),
 		/new row violates row-level security policy for table "secret"/
@@ -232,6 +242,7 @@ test('RLS: org and group', async (t) => {
 		(sql) => sql`
 			insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 					values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '','', ${server_public_key_id})
+			on conflict do nothing
 		`
 	)
 
@@ -242,7 +253,8 @@ test('RLS: org and group', async (t) => {
 				(sql) => sql`
 				insert into zecret.secret(organization_name, path, key, value, iv, symmetric_secret, server_public_key_id)
 					values ('harth', '/evgen/upload', 'DATABASE_URL', 'postgres://upload:password@postgres:5432/postgres', '','', ${server_public_key_id})
-			`
+					on conflict do nothing
+				`
 			),
 		/new row violates row-level security policy for table "secret"/
 	)

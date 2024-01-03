@@ -4,7 +4,8 @@
 		"allowSyntheticDefaultImports": true,
 		"strict": true,
 		"module": "ESNext",
-		"moduleResolution": "node"
+		"moduleResolution": "node",
+		"target": "ES2022"
 	},
 	"typeAcquisition": {
 		"enable": true

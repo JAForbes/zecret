@@ -212,9 +212,6 @@ export default async function ManageOrganizationCommand(
 					on conflict do nothing
 				`
 
-				console.log()
-				console.log('users.count', usersRes.count)
-
 				const orgUsersRes = await sql`
 					insert into zecret.org_user(organization_name, user_id)
 					
@@ -225,7 +222,6 @@ export default async function ManageOrganizationCommand(
 					and U.github_user_id in ${sql(uniq)}
 					on conflict do nothing
 				`
-				console.log('org_users.count', orgUsersRes.count)
 
 				const userIdx = await sql`
 					select user_id, github_user_id
@@ -415,21 +411,20 @@ export default async function ManageOrganizationCommand(
 				`
 			}
 
-			console.log(6)
-
 			return {
 				tag: 'ManageOrganizationOk',
 				value: {}
 			} as ManageOrganizationOk
 		})
 		.catch((err) => {
-			console.error(err)
+			const expectedError = err.message.includes(
+				'violates row-level security policy'
+			)
+			expectedError || console.error(err)
 			return {
 				tag: 'ManageOrganizationErr',
 				value: {
-					message: err.message.includes('violates row-level security policy')
-						? 'Insufficient Permissions'
-						: 'Unknown Error'
+					message: expectedError ? 'Insufficient Permissions' : 'Unknown Error'
 				}
 			} as ManageOrganizationResponse
 		})
