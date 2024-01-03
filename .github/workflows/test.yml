@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      POSTGRES_DB: zecret
+      POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_HOST_AUTH_METHOD: trust
@@ -18,7 +18,7 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_DB: zecret
+          POSTGRES_DB: postgres
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -49,3 +49,16 @@ jobs:
       - run: wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
       - run: sudo apt-get update -y
       - run: sudo apt-get install -y postgresql-client libpq-dev
+      - run: npm install
+        working-directory: ./services/migrations
+
+      - name: migration
+
+        run: |
+          echo '{ "type": "module" }' > 'package.json';
+          npm install JAForbes/pgmg#e77436e6b93b39f0a4367db2352c29e3076c813d;
+          npx pgmg $DATABASE_URL migrations/*.js;
+
+        working-directory: ./services/migrations
+        env:
+          DATABASE_URL: postgres://postgres:password@postgres:5432/postgres
