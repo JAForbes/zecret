@@ -50,10 +50,23 @@ jobs:
           sudo apt-get install -y postgresql-client libpq-dev;
 
       - name: Migration
-
+        working-directory: ./services/migrations
         run: |
           echo '{ "type": "module" }' > 'package.json';
           npm install JAForbes/pgmg#e77436e6b93b39f0a4367db2352c29e3076c813d;
           npx pgmg postgres://postgres:password@localhost:5432/postgres migrations/*.js --prod;
 
-        working-directory: ./services/migrations
+      - name: Server Tests
+        working-directory: ./services/server
+        run: |
+          npm install
+          npm test
+
+      # - name: CLI Tests
+      #   working-directory: ./services/cli
+      #   run: |
+      #     (cd ../server; node run.js dev &)
+      #     PID=$!
+      #     npm install
+      #     npm test
+      #     kill $PID
