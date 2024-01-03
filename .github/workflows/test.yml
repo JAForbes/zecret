@@ -54,8 +54,6 @@ jobs:
         run: |
           echo '{ "type": "module" }' > 'package.json';
           npm install JAForbes/pgmg#e77436e6b93b39f0a4367db2352c29e3076c813d;
-          npx pgmg $DATABASE_URL migrations/*.js --prod;
+          npx pgmg postgres://postgres:password@localhost:5432/postgres migrations/*.js --prod;
 
         working-directory: ./services/migrations
-        env:
-          DATABASE_URL: postgres://postgres:password@postgres:5432/postgres
