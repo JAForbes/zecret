@@ -1,4 +1,4 @@
-import { LoginCommand } from './server-login.js'
+import { KeyAuthority, LoginCommand } from './server-login.js'
 import { WhoAmICommand } from './server-whoami.js'
 
 export type KeyPair = {
@@ -7,11 +7,7 @@ export type KeyPair = {
 }
 
 export type DecodedToken = {
-	gh: {
-		username: string
-	}
-
-	shared_secret: string
+	key_authority: KeyAuthority
 
 	public_key_hash: string
 

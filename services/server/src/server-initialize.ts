@@ -1,22 +1,22 @@
-import sshpk from "sshpk"
-import postgres from "postgres"
-import crypto from "crypto"
+import sshpk from 'sshpk'
+import postgres from 'postgres'
+import crypto from 'crypto'
 
 import {
 	InitializeStoreCommand,
 	InitializeStoreResponse,
 	State
-} from "./types.js"
-import { state, replaceState } from "./server-state.js"
+} from './types.js'
+import { state, replaceState } from './server-state.js'
 
 export async function InitializeStoreCommand(
 	command: InitializeStoreCommand
 ): Promise<InitializeStoreResponse> {
-	if (state.state !== "idle") {
+	if (state.state !== 'idle') {
 		return {
-			tag: "InitializeStoreErr",
+			tag: 'InitializeStoreErr',
 			value: {
-				message: "Store is already initialized"
+				message: 'Store is already initialized'
 			}
 		}
 	}
@@ -28,20 +28,20 @@ export async function InitializeStoreCommand(
 	]
 	if (!required.every((x) => x)) {
 		return {
-			tag: "InitializeStoreErr",
+			tag: 'InitializeStoreErr',
 			value: {
-				message: "Missing required values"
+				message: 'Missing required values'
 			}
 		}
 	}
 
 	const sql = await postgres(command.value.database_url)
 	const public_key = sshpk
-		.parseKey(command.value.key_pair.public_key, "ssh")
-		.toBuffer("pkcs8")
+		.parseKey(command.value.key_pair.public_key, 'ssh')
+		.toBuffer('pkcs8')
 	const private_key = sshpk
-		.parsePrivateKey(command.value.key_pair.private_key, "ssh")
-		.toBuffer("pkcs8")
+		.parsePrivateKey(command.value.key_pair.private_key, 'ssh')
+		.toBuffer('pkcs8')
 
 	const [err, data] = await sql`
 		with effect as (
@@ -49,16 +49,16 @@ export async function InitializeStoreCommand(
 				server_public_key_id, server_public_key_pkcs8
 			)
 			values (${crypto
-				.createHash("sha256")
-				.update(public_key.toString("hex"))
-				.digest("hex")},${public_key.toString("hex")})
+				.createHash('sha256')
+				.update(public_key.toString('hex'))
+				.digest('hex')},${public_key.toString('hex')})
 			on conflict (server_public_key_pkcs8) do nothing
 			returning server_public_key_id
 		)
 		, backup as (
 			select server_public_key_id
 			from zecret.server_public_key
-			where server_public_key_pkcs8 = ${public_key.toString("hex")}
+			where server_public_key_pkcs8 = ${public_key.toString('hex')}
 		)
 		select server_public_key_id
 		from effect
@@ -71,15 +71,16 @@ export async function InitializeStoreCommand(
 
 	if (err) {
 		return {
-			tag: "InitializeStoreErr",
+			tag: 'InitializeStoreErr',
 			value: {
 				message: err.message
 			}
 		}
 	}
 
-	let newState: State = {
-		state: "active",
+	replaceState({
+		...state,
+		state: 'active',
 		key_pairs: [
 			{
 				public_key,
@@ -89,12 +90,10 @@ export async function InitializeStoreCommand(
 		],
 		postgres: sql,
 		token_secret: command.value.token_secret
-	}
-
-	replaceState(newState)
+	})
 
 	return {
-		tag: "InitializeStoreOk",
+		tag: 'InitializeStoreOk',
 		value: {}
 	}
 }

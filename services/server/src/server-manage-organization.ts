@@ -1,25 +1,27 @@
+import { KeyAuthority } from './server-login.js'
 import { tokenBoilerPlate } from './util.js'
+import R from 'ramda'
 
 export type GroupUser = {
 	tag: 'GroupUser'
 	group_name: string
 	user_id: string
 }
-export type GroupGithubUser = {
-	tag: 'GroupGithubUser'
+export type GroupKeyAuthorityUser = {
+	tag: 'GroupKeyAuthorityUser'
 	group_name: string
-	github_user_id: string
+	keyAuthority: KeyAuthority
 }
-export type GroupMember = GroupUser | GroupGithubUser
+export type GroupMember = GroupUser | GroupKeyAuthorityUser
 export type UserGrant = {
 	tag: 'UserGrant'
-	user_id: string
+	user_name: string
 	path: string
 	grant_level: 'write' | 'read'
 }
-export type GithubUserGrant = {
-	tag: 'GithubUserGrant'
-	github_user_id: string
+export type KeyAuthorityUserGrant = {
+	tag: 'KeyAuthorityUserGrant'
+	key_authority: KeyAuthority
 	path: string
 	grant_level: 'write' | 'read'
 }
@@ -29,7 +31,7 @@ export type GroupGrant = {
 	path: string
 	grant_level: 'write' | 'read'
 }
-export type Grant = GithubUserGrant | UserGrant | GroupGrant
+export type Grant = KeyAuthorityUserGrant | UserGrant | GroupGrant
 export type ManageOrganizationCommand = {
 	tag: 'ManageOrganizationCommand'
 	value: {
@@ -101,9 +103,34 @@ export default async function ManageOrganizationCommand(
 	return sql
 		.begin(async (sql) => {
 			await sql`
-				select zecret.set_active_user(user_id)
+				select 
+					zecret.set_active_user(U.user_name) 
+					${
+						data.decoded.key_authority.tag === 'OrgKeyAuthority'
+							? sql`, zecret.set_active_org(${data.decoded.key_authority.organization_name})`
+							: sql``
+					}
 				from zecret.user U
-				where U.github_user_id = ${data.decoded.gh.username}
+				${
+					data.decoded.key_authority.tag === 'ZecretKeyAuthority'
+						? sql`where U.user_name = ${data.decoded.key_authority.user_name}`
+						: data.decoded.key_authority.tag === 'KnownKeyAuthority'
+						? sql`
+							inner join zecret.known_key_authority_user_name KAU
+							on U.user_name = KAU.user_name
+							and KAU.key_authority_name = ${data.decoded.key_authority.key_authority_name}
+							and KAU.key_authority_user_name = ${data.decoded.key_authority.user_name}
+						`
+						: data.decoded.key_authority.tag === 'OrgKeyAuthority'
+						? sql`
+							inner join zecret.org_key_authority_user_name OAU
+							on U.user_name = OAU.user_name
+							and OAU.key_authority_name = ${data.decoded.key_authority.key_authority_name}
+							and OAU.key_authority_user_name = ${data.decoded.key_authority.user_name}
+							and OAU.organization_name = ${data.decoded.key_authority.organization_name}
+						`
+						: sql`where false`
+				}
 			`
 
 			// create org if it doesn't exist, if it does exist
@@ -115,7 +142,7 @@ export default async function ManageOrganizationCommand(
 			`
 
 			await sql`
-				insert into zecret.org_user(organization_name, user_id)
+				insert into zecret.org_user(organization_name, user_name)
 				values (${organization_name}, zecret.get_active_user())
 				on conflict do nothing
 			`
@@ -187,76 +214,423 @@ export default async function ManageOrganizationCommand(
 				`
 			}
 
-			// From here on in, within the API / CLI / UI you can add users via their github
-			// and probably other trusted platforms.  But in the schema we don't want an explosion
-			// of complexity, so we just create an internal user for every mention of a github user
-			// So let's do that right now
+			// From here on in, within the API / CLI / UI you can add users via their github etc.
+			// We allow this even before that user has signed up by recording the grant to that key authority.
+			//
+			// When the user signs up, we insert a key authority user record which
+			// is picked up by the RLS so they will automatically get access
+			// in group related queries.
 
-			setup_gh_users: {
-				const grantUserIds = [...grants.add, ...grants.remove]
-					.flatMap((x) => (x.tag === 'GithubUserGrant' ? [x] : []))
-					.map((x) => x.github_user_id)
+			const types: Grant['tag'][] = [
+				'GroupGrant',
+				'KeyAuthorityUserGrant',
+				'UserGrant' // UserGrant must come last, or at least after KeyAuthorityUserGrant
+			]
 
-				const groupUserIds = [...group_members.add, ...group_members.remove]
-					.flatMap((x) => (x.tag === 'GroupGithubUser' ? [x] : []))
-					.map((x) => x.github_user_id)
+			let filterGrants = (t: Grant['tag'], op: 'add' | 'remove') => {
+				return grants[op].filter((x) => x.tag === t)
+			}
 
-				const uniq = [...new Set([...grantUserIds, ...groupUserIds])]
+			for (let [type, op] of types.flatMap(
+				(t) =>
+					[
+						[t, 'remove'],
+						[t, 'add']
+					] as const
+			)) {
+				await (async (): Promise<true> => {
+					let filtered = filterGrants(type, op)
+					if (filtered.length === 0) return true
 
-				if (uniq.length == 0) {
-					break setup_gh_users
-				}
-				const usersRes = await sql`
-					insert into zecret.user(github_user_id)
-					values ${sql(uniq)}
-					on conflict do nothing
-				`
+					switch (type) {
+						case 'GroupGrant': {
+							const mapped = filtered.flatMap((x) =>
+								x.tag === 'GroupGrant'
+									? [
+											{
+												organization_name: theirCommand.value.organization_name,
+												group_name: x.group_name,
+												path: x.path,
+												grant_level: x.grant_level
+											}
+									  ]
+									: []
+							)
+							switch (op) {
+								case 'add': {
+									await sql`
+										insert into zecret.grant_group
+										${sql(mapped)}
+									`
+									return true
+								}
+								case 'remove': {
+									await sql`
+										delete from zecret.grant_group
+										${sql(mapped)}
+									`
+									return true
+								}
+							}
+						}
 
-				const orgUsersRes = await sql`
-					insert into zecret.org_user(organization_name, user_id)
-					
-					select O.organization_name, U.user_id
-					from zecret.user U
-					cross join zecret.org O
-					where O.organization_name = ${organization_name}
-					and U.github_user_id in ${sql(uniq)}
-					on conflict do nothing
-				`
+						// we only store key authority grants if the user doesn't exist yet
+						// if the user does exist we instead create a user grant
+						// in the `types` list, UserGrant comes last, so we just push into the
+						// `grants` list our UserGrants where applicable and they get picked up
+						// in the next phase
+						case 'KeyAuthorityUserGrant': {
+							// note there is so much duplication here
+							// but the schema is young, so that may change if org/zecret/known
+							// key authority schemas drift, but you could almost have a single table with a nullable org name
+							// and an enum column for known / org / zecret, you could also parameterize a lot of this code
+							// keep the schema distinct but unify the code, I'm going to keep it sprawling and repetitive for now
+							// until it settles a bit
+							let kats: KeyAuthority['tag'][] = [
+								'KnownKeyAuthority',
+								'OrgKeyAuthority',
+								'ZecretKeyAuthority'
+							]
+							for (let kat of kats) {
+								switch (kat) {
+									case 'KnownKeyAuthority': {
+										const mapped = filtered.flatMap((x) =>
+											x.tag === 'KeyAuthorityUserGrant' &&
+											x.key_authority.tag === 'KnownKeyAuthority'
+												? [
+														{
+															organization_name:
+																theirCommand.value.organization_name,
+															key_authority_user_name:
+																x.key_authority.user_name,
+															key_authority_name:
+																x.key_authority.key_authority_name,
+															grant_level: x.grant_level,
+															path: x.path
+														}
+												  ]
+												: []
+										)
 
-				const userIdx = await sql`
-					select user_id, github_user_id
-					from zecret.user
-					where github_user_id in ${sql(uniq)}
-				`.then((xs) => Object.fromEntries(xs.map((x) => [x.github_user_id, x.user_id])))
+										// check if any users already exists
+										const infoIdx = await sql<
+											{
+												key_authority_user_name: string
+												user_name?: string
+												exists: boolean
+											}[]
+										>`
+											select 
+												request.key_authority_user_name
+												, K.key_authority_user_name is not null as exists
+												, K.user_name as user_name
+											from (
+												${sql(mapped.map((x) => Object.values(x)))}
+											) as request(
+												, key_authority_user_name
+												, key_authority_name
+											)
+											left join known_key_authority_user_name(
+												key_authority_name, key_authority_user_name,
+											) as K
+										`.then((xs) =>
+											xs.reduce(
+												(p, n) => ({
+													...p,
+													[n.key_authority_user_name]: {
+														exists: n.exists,
+														user_name: n.user_name
+													}
+												}),
+												{} as Record<
+													string,
+													{ exists: boolean; user_name?: string }
+												>
+											)
+										)
 
-				const transformGrant = (x: Grant) =>
-					x.tag !== 'GithubUserGrant'
-						? x
-						: ({
-								tag: 'UserGrant',
-								grant_level: x.grant_level,
-								path: x.path,
-								user_id: userIdx[x.github_user_id]
-						  } as UserGrant)
+										let [doesExist, doesNotExist] = R.partition(
+											(x) => infoIdx[x.key_authority_user_name].exists,
+											mapped
+										)
 
-				const transformGroupMember = (x: GroupMember) =>
-					x.tag !== 'GroupGithubUser'
-						? x
-						: ({
-								tag: 'GroupUser',
-								group_name: x.group_name,
-								user_id: userIdx[x.github_user_id]
-						  } as GroupUser)
+										// for the existing users we'll handle them in the UserGrant section
+										grants[op].push(
+											...doesExist.map(
+												(x) =>
+													({
+														grant_level: x.grant_level,
+														path: x.path,
+														user_name:
+															infoIdx[x.key_authority_user_name].user_name!,
+														tag: 'UserGrant'
+													} as UserGrant)
+											)
+										)
+										switch (op) {
+											case 'add':
+												await sql`
+													insert into zecret.grant_known_key_authority_user 
+													${sql(doesNotExist)}
+												`
+												return true
+											case 'remove':
+												await sql`
+													delete from zecret.grant_known_key_authority_user
+													where (
+														organization_name
+														, path
+														, grant_level
+														, key_authority_name
+														, key_authority_user_name
+													) in ${sql(
+														doesNotExist,
+														'organization_name',
+														'path',
+														'grant_level',
+														'key_authority_name',
+														'key_authority_user_name'
+													)}
+												`
+												return true
+										}
+									}
+									case 'OrgKeyAuthority': {
+										const mapped = filtered.flatMap((x) =>
+											x.tag === 'KeyAuthorityUserGrant' &&
+											x.key_authority.tag === 'OrgKeyAuthority'
+												? [
+														{
+															organization_name:
+																theirCommand.value.organization_name,
+															key_authority_user_name:
+																x.key_authority.user_name,
+															key_authority_name:
+																x.key_authority.key_authority_name,
+															grant_level: x.grant_level,
+															path: x.path
+														}
+												  ]
+												: []
+										)
 
-				grants = {
-					add: grants.add.map(transformGrant),
-					remove: grants.remove.map(transformGrant)
-				}
+										// check if any users already exists
+										const infoIdx = await sql<
+											{
+												key_authority_user_name: string
+												user_name?: string
+												exists: boolean
+											}[]
+										>`
+											select 
+												request.key_authority_user_name
+												, K.key_authority_user_name is not null as exists
+												, K.user_name as user_name
+											from (
+												${sql(mapped.map((x) => Object.values(x)))}
+											) as request(
+												, key_authority_user_name
+												, key_authority_name
+											)
+											left join org_key_authority_user_name(
+												key_authority_name, key_authority_user_name,
+											) as K
+										`.then((xs) =>
+											xs.reduce(
+												(p, n) => ({
+													...p,
+													[n.key_authority_user_name]: {
+														exists: n.exists,
+														user_name: n.user_name
+													}
+												}),
+												{} as Record<
+													string,
+													{ exists: boolean; user_name?: string }
+												>
+											)
+										)
 
-				group_members = {
-					add: group_members.add.map(transformGroupMember),
-					remove: group_members.remove.map(transformGroupMember)
-				}
+										let [doesExist, doesNotExist] = R.partition(
+											(x) => infoIdx[x.key_authority_user_name].exists,
+											mapped
+										)
+
+										// for the existing users we'll handle them in the UserGrant section
+										grants[op].push(
+											...doesExist.map(
+												(x) =>
+													({
+														grant_level: x.grant_level,
+														path: x.path,
+														user_name:
+															infoIdx[x.key_authority_user_name].user_name!,
+														tag: 'UserGrant'
+													} as UserGrant)
+											)
+										)
+										switch (op) {
+											case 'add':
+												await sql`
+													insert into zecret.grant_org_key_authority_user 
+													${sql(doesNotExist)}
+												`
+												return true
+											case 'remove':
+												await sql`
+													delete from zecret.grant_org_key_authority_user
+													where (
+														organization_name
+														, path
+														, grant_level
+														, key_authority_name
+														, key_authority_user_name
+													) in ${sql(
+														doesNotExist,
+														'organization_name',
+														'path',
+														'grant_level',
+														'key_authority_name',
+														'key_authority_user_name'
+													)}
+												`
+												return true
+										}
+									}
+									case 'ZecretKeyAuthority': {
+										const mapped = filtered.flatMap((x) =>
+											x.tag === 'KeyAuthorityUserGrant' &&
+											x.key_authority.tag === 'ZecretKeyAuthority'
+												? [
+														{
+															organization_name:
+																theirCommand.value.organization_name,
+															key_authority_user_name:
+																x.key_authority.user_name,
+															key_authority_name: 'zecret',
+															grant_level: x.grant_level,
+															path: x.path
+														}
+												  ]
+												: []
+										)
+
+										// check if any users already exists
+										const infoIdx = await sql<
+											{
+												key_authority_user_name: string
+												user_name?: string
+												exists: boolean
+											}[]
+										>`
+											select 
+												request.key_authority_user_name
+												, K.key_authority_user_name is not null as exists
+												, K.user_name as user_name
+											from (
+												${sql(mapped.map((x) => Object.values(x)))}
+											) as request(
+												, key_authority_user_name
+												, key_authority_name
+											)
+											left join known_key_authority_user_name(
+												key_authority_name, key_authority_user_name,
+											) as K
+										`.then((xs) =>
+											xs.reduce(
+												(p, n) => ({
+													...p,
+													[n.key_authority_user_name]: {
+														exists: n.exists,
+														user_name: n.user_name
+													}
+												}),
+												{} as Record<
+													string,
+													{ exists: boolean; user_name?: string }
+												>
+											)
+										)
+
+										let [doesExist, doesNotExist] = R.partition(
+											(x) => infoIdx[x.key_authority_user_name].exists,
+											mapped
+										)
+
+										// for the existing users we'll handle them in the UserGrant section
+										grants[op].push(
+											...doesExist.map(
+												(x) =>
+													({
+														grant_level: x.grant_level,
+														path: x.path,
+														user_name:
+															infoIdx[x.key_authority_user_name].user_name!,
+														tag: 'UserGrant'
+													} as UserGrant)
+											)
+										)
+										switch (op) {
+											case 'add':
+												await sql`
+													insert into zecret.grant_known_key_authority_user 
+													${sql(doesNotExist)}
+												`
+												return true
+											case 'remove':
+												await sql`
+													delete from zecret.grant_known_key_authority_user
+													where (
+														organization_name
+														, path
+														, grant_level
+														, key_authority_name
+														, key_authority_user_name
+													) in ${sql(
+														doesNotExist,
+														'organization_name',
+														'path',
+														'grant_level',
+														'key_authority_name',
+														'key_authority_user_name'
+													)}
+												`
+												return true
+										}
+									}
+								}
+							}
+						}
+						case 'UserGrant': {
+							const mapped = filtered.flatMap((x) =>
+								x.tag === 'UserGrant'
+									? [
+											{
+												organization_name: theirCommand.value.organization_name,
+												path: x.path,
+												grant_level: x.grant_level,
+												user_name: x.user_name
+											}
+									  ]
+									: []
+							)
+							switch (op) {
+								case 'add':
+									await sql`
+										insert into zecret.grant_user ${sql(mapped)}
+									`
+									return true
+								case 'remove':
+									await sql`
+										delete from zecret.grant_user where (
+											organization_name, path, grant_level, user_name
+										) in ${sql(mapped.map((x) => Object.values(x)))}
+									`
+									return true
+							}
+						}
+					}
+				})()
 			}
 
 			// now we move onto org membership, we'll remove
@@ -336,7 +710,7 @@ export default async function ManageOrganizationCommand(
 				where (G.organization_name, G.path, G.grant_level, G.user_id) in ${sql(
 					grants.remove.flatMap((o) =>
 						o.tag === 'UserGrant'
-							? [sql([organization_name, o.path, o.grant_level, o.user_id])]
+							? [sql([organization_name, o.path, o.grant_level, o.user_name])]
 							: []
 					)
 				)}
@@ -359,7 +733,7 @@ export default async function ManageOrganizationCommand(
 						'organization_name',
 						'path',
 						'grant_level',
-						'user_id'
+						'user_name'
 					)}
 					on conflict do nothing
 				`

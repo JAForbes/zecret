@@ -4,10 +4,10 @@ export const action = async (sql, { roles }) => {
 	const service = sql.unsafe(roles.service)
 
 	await sql`
-		create or replace function zecret.set_active_user(_user_id uuid)
+		create or replace function zecret.set_active_user(_user_name public.citext)
 		returns void
 		as $$
-			select set_config('zecret.user_id', _user_id::text, true);
+			select set_config('zecret.user_name', _user_name::text, true);
 		$$
 		language sql
 		set search_path = ''
@@ -46,7 +46,7 @@ export const action = async (sql, { roles }) => {
 		create policy api_update_user on zecret.user
 		for update
 		to ${service}
-		using ( user_id = zecret.get_active_user() )
+		using ( user_name = zecret.get_active_user() )
 	;
 	`
 	await sql`
@@ -58,18 +58,18 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
-		create or replace function zecret.user_is_in_org(_organization_name public.citext, _user_id uuid)
+		create or replace function zecret.user_is_in_org(_organization_name public.citext, _user_name public.citext)
 		returns boolean
 		as $$
 			select exists (
 				select true
 				from zecret.org_user OU
-				where (OU.user_id, OU.organization_name) = (_user_id, _organization_name)
+				where (OU.user_name, OU.organization_name) = (_user_name, _organization_name)
 			)
 			or exists (
 				select true
 				from zecret.org O
-				where (O.organization_name, O.primary_owner_id) = (_organization_name, _user_id)
+				where (O.organization_name, O.primary_owner_id) = (_organization_name, _user_name)
 			)
 		$$
 		language sql
@@ -83,19 +83,48 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
-		create or replace function zecret.user_is_admin(_organization_name public.citext, _user_id uuid)
+		create policy api_select_known_key_authority on zecret.known_key_authority
+		for select
+		to ${service}
+		using ( deleted_at is null )
+		;
+	`
+	await sql`
+		create policy api_select_org_key_authority on zecret.org_key_authority
+		for select
+		to ${service}
+		using ( deleted_at is null and zecret.user_is_in_org(organization_name, zecret.get_active_user()) )
+		;
+	`
+	await sql`
+		create policy api_select_known_key_authority_user_name on zecret.known_key_authority_user_name
+		for select
+		to ${service}
+		using ( deleted_at is null )
+		;
+	`
+	await sql`
+		create policy api_select_org_key_authority_user_name on zecret.org_key_authority_user_name
+		for select
+		to ${service}
+		using ( deleted_at is null and zecret.user_is_in_org(organization_name, zecret.get_active_user()) )
+		;
+	`
+
+	await sql`
+		create or replace function zecret.user_is_admin(_organization_name public.citext, _user_name public.citext)
 		returns boolean
 		as $$
 			select exists (
 				select true
 				from zecret.org_user OU
-				inner join zecret.org_admin using(organization_name, user_id)
-				where (OU.user_id, OU.organization_name) = (_user_id, _organization_name)
+				inner join zecret.org_admin using(organization_name, user_name)
+				where (OU.user_name, OU.organization_name) = (_user_name, _organization_name)
 			)
 			or exists (
 				select true
 				from zecret.org O
-				where (O.organization_name, O.primary_owner_id) = (_organization_name, _user_id)
+				where (O.organization_name, O.primary_owner_id) = (_organization_name, _user_name)
 			)
 		$$
 		language sql
@@ -260,14 +289,14 @@ export const action = async (sql, { roles }) => {
 		to ${service}
 		with check (
 			zecret.user_is_admin( organization_name, zecret.get_active_user() )
-			and zecret.user_is_in_org( organization_name, user_id )
+			and zecret.user_is_in_org( organization_name, user_name )
 		)
 	`
 
 	await sql`
 		create or replace function zecret.has_write_permission_at_path(
 			_organization_name public.citext
-			, _user_id uuid
+			, _user_name public.citext
 			, _path public.citext
 		)
 		returns boolean
@@ -280,24 +309,24 @@ export const action = async (sql, { roles }) => {
 				from zecret.org O
 				where
 					O.organization_name = _organization_name
-					and O.primary_owner_id = _user_id
+					and O.primary_owner_id = _user_name
 				limit 1
 			)
 			or -- user has / grant permission
 			exists (
-				select G.user_id
+				select G.user_name
 				from zecret.grant_user G
 				where _path like G.path||'%'
-				and (G.organization_name, G.user_id) = (_organization_name, _user_id)
+				and (G.organization_name, G.user_name) = (_organization_name, _user_name)
 				and G.grant_level = 'write'
 				limit 1
 			)
 			or -- user has / grant permission via a group
 			exists (
-				select GU.user_id
+				select GU.user_name
 				from zecret.grant_group GT
 				inner join zecret.group_user GU on
-					(GT.organization_name, GT.group_name, _user_id) = (GU.organization_name, GU.group_name, GU.user_id)
+					(GT.organization_name, GT.group_name, _user_name) = (GU.organization_name, GU.group_name, GU.user_name)
 				where _path like GT.path||'%'
 				and GT.organization_name = _organization_name
 				and GT.grant_level = 'write'
@@ -318,7 +347,7 @@ export const action = async (sql, { roles }) => {
 	await sql`
 		create or replace function zecret.has_read_permission_at_path(
 			_organization_name public.citext
-			, _user_id uuid
+			, _user_name public.citext
 			, _path public.citext
 		)
 		returns boolean
@@ -330,24 +359,24 @@ export const action = async (sql, { roles }) => {
 				from zecret.org O
 				where
 					O.organization_name = _organization_name
-					and O.primary_owner_id = _user_id
+					and O.primary_owner_id = _user_name
 				limit 1
 			)
 			or -- user has / read permission
 			exists (
-				select G.user_id
+				select G.user_name
 				from zecret.grant_user G
 				where _path like G.path||'%'
-				and (G.organization_name, G.user_id) = (_organization_name, _user_id)
+				and (G.organization_name, G.user_name) = (_organization_name, _user_name)
 				and G.grant_level in ('read', 'write')
 				limit 1
 			)
 			or -- user has / read permission via a group
 			exists (
-				select GU.user_id
+				select GU.user_name
 				from zecret.grant_group GT
 				inner join zecret.group_user GU on
-					(GT.organization_name, GT.group_name, _user_id) = (GU.organization_name, GU.group_name, GU.user_id)
+					(GT.organization_name, GT.group_name, _user_name) = (GU.organization_name, GU.group_name, GU.user_name)
 				where _path like GT.path||'%'
 				and GT.organization_name = _organization_name
 				and GT.grant_level in ('read', 'write')

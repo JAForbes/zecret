@@ -5,25 +5,28 @@
   "module": "index.js",
   "type": "module",
   "scripts": {
-    "test": "npx tsx --test test/*.ts",
-		"#test-watch": "tsx --watch was creating pipe errors, so we use NODE_OPTIONS instead",
-		"test-watch": "NODE_OPTIONS='--import tsx' node --watch --test-concurrency 1 --test test/*.ts"
+    "test": "npx tsx --test-reporter spec --test test/*.ts",
+    "#test-watch": "tsx --watch was creating pipe errors, so we use NODE_OPTIONS instead",
+    "test-watch": "NODE_OPTIONS='--import tsx' node --watch --test-concurrency 1 --test test/*.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/mustache": "^4.2.5",
     "crypto-random-string": "^5.0.0",
     "jsonwebtoken": "^9.0.2",
     "minimist": "^1.2.8",
+    "mustache": "^4.2.0",
     "node-fetch": "^3.3.2",
     "postgres": "^3.4.3",
+    "ramda": "0.29.1",
     "sshpk": "^1.18.0",
     "zx": "^7.2.3"
   },
   "devDependencies": {
-    "@types/node": "^20.10.3",
-		"tsx": "4.6.2",
-    "esbuild": "^0.19.8"
+    "@types/node": "^20.11.5",
+    "esbuild": "^0.19.8",
+    "tsx": "4.6.2"
   }
 }
