@@ -2,6 +2,14 @@ import Fastify from 'fastify'
 
 const app = Fastify({ logger: true })
 
+app.post('/api/users', (req, res) => {
+	return { message: 'yay' }
+})
+
+app.delete('/api/users', (req, res) => {
+	return { message: 'yay' }
+})
+
 const start = async () => {
 	try {
 		await app.listen({

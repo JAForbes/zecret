@@ -62,11 +62,14 @@ services:
       - $PWD/services/tests:$PWD/services/tests
     environment:
       TEST_DATABASE_URL: postgres://postgres:password@zecret-db.flycast:5432/postgres
-      ZECRET_API_URL: http://zecret-api:8080/api/postgres
+      ZECRET_API_URL: http://zecret-api.flycast:8080/api
     # keeps esbuild watch running
     tty: true
     # exit node from SIGINT
     init: true
+    networks:
+      - zecret-tst
+
     depends_on:
       zec-tst-mg: 
         condition: service_healthy
