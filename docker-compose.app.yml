@@ -1,0 +1,58 @@
+services:
+  zec-app-db:
+    hostname: zecret-db.flycast
+    image: postgres:15.5
+    shm_size: 512mb
+    ports:
+      - 5435:5432
+    environment:
+      PGDATA: /var/lib/pg_data
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - ./output/.pg/data/pgdata:/var/lib/pg_data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zecret-app
+
+  zec-app-mg:
+    build:
+      context: ./services/migrations
+      target: dev
+    environment:
+      - DATABASE_URL=postgres://postgres:password@zecret-db.flycast:5432/postgres
+      - API_DATABASE_URL=postgres://api:password@zecret-db.flycast:5432/postgres
+    volumes:
+      - ./services/migrations/migrations:/usr/src/app/migrations
+      - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
+
+    depends_on:
+      zec-app-db:
+        condition: service_healthy
+    networks:
+      - zecret-app
+
+  zec-app-api:
+    hostname: zecret-api.flycast
+    build: ./services/server
+    working_dir: $PWD/services/server
+    user: node
+    volumes:
+      - $PWD/services/server:$PWD/services/server
+    environment:
+      API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+    networks:
+      - zecret-app
+    
+networks:
+  zecret-app:
+
+

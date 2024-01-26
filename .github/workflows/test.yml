@@ -64,12 +64,3 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/postgres
           DATABASE_URL: postgres://zecret_api:password@localhost:5432/postgres
-
-      # - name: CLI Tests
-      #   working-directory: ./services/cli
-      #   run: |
-      #     (cd ../server; node run.js dev &)
-      #     PID=$!
-      #     npm install
-      #     npm test
-      #     kill $PID

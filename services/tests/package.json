@@ -1,0 +1,24 @@
+{
+  "name": "zecret-tests",
+  "version": "1.0.0",
+  "description": "",
+  "module": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx --test-reporter spec --test src/*.ts",
+    "#dev": "tsx --watch was creating pipe errors, so we use NODE_OPTIONS instead",
+    "dev": "NODE_OPTIONS='--import tsx' node --watch --test-concurrency 1 --test src/*.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/mustache": "^4.2.5",
+    "jsonwebtoken": "^9.0.2",
+    "postgres": "^3.4.3",
+    "tsx": "4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5"
+  }
+}

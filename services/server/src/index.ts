@@ -1,21 +1,29 @@
-import minimist from "minimist";
-import cli from "./cli";
-import server from "./server";
+import Fastify from 'fastify'
 
-type Mode = "server" | "cli";
+const app = Fastify({ logger: true })
 
-const argv = minimist(process.argv.slice(2));
+const start = async () => {
+	try {
+		await app.listen({
+			port: Number(process.env.PORT) || 8080,
+			host: '::'
+		})
 
-const mode: Mode = argv._.find((x) => x === "serve") ? "server" : "cli";
+		Object.keys({
+			SIGHUP: 1,
+			SIGINT: 2,
+			SIGTERM: 15
+		}).forEach((signal) => {
+			process.on(signal, () => {
+				app.close(() => {
+					process.exit(128)
+				})
+			})
+		})
+	} catch (err) {
+		console.log(err)
+		process.exit(1)
+	}
+}
 
-const commands = {
-	server,
-	cli,
-} as const;
-
-const command = commands[mode];
-
-command(argv).catch((e) => {
-	console.error(e);
-	process.exitCode = 1;
-});
+start()

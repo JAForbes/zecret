@@ -1,0 +1,75 @@
+services:
+  
+  zec-tst-db:
+    image: postgres:15.5
+    hostname: zecret-db.flycast
+    shm_size: 512mb
+    ports:
+      - 5436:5432
+    environment:
+      PGDATA: /var/lib/pg_data
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - ./output/.pg-tst/data/pgdata:/var/lib/pg_data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zecret-tst
+
+  zec-tst-mg:
+    build:
+      context: ./services/migrations
+      target: dev
+    environment:
+      - DATABASE_URL=postgres://postgres:password@zecret-db.flycast:5432/postgres
+      - API_DATABASE_URL=postgres://api:password@zecret-db.flycast:5432/postgres
+    volumes:
+      - ./services/migrations/migrations:/usr/src/app/migrations
+      - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
+
+    depends_on:
+      zec-tst-db:
+        condition: service_healthy
+
+    networks:
+      - zecret-tst
+
+  zec-tst-api:
+    hostname: zecret-api.flycast
+    build: ./services/server
+    working_dir: $PWD/services/server
+    user: node
+    volumes:
+      - $PWD/services/server:$PWD/services/server
+    environment:
+      API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+    networks:
+      - zecret-tst
+
+  zec-tst-tst:
+    build: ./services/tests
+    working_dir: $PWD/services/tests
+    user: node
+    volumes:
+      - $PWD/services/tests:$PWD/services/tests
+    environment:
+      TEST_DATABASE_URL: postgres://postgres:password@zecret-db.flycast:5432/postgres
+      ZECRET_API_URL: http://zecret-api:8080/api/postgres
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+    depends_on:
+      zec-tst-mg: 
+        condition: service_healthy
+
+networks:
+  zecret-tst:
