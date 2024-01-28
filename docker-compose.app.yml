@@ -9,6 +9,8 @@ services:
       PGDATA: /var/lib/pg_data
       POSTGRES_PASSWORD: password
       POSTGRES_HOST_AUTH_METHOD: trust
+    env_file:
+      - ./services/server/.env
     volumes:
       - ./output/.pg/data/pgdata:/var/lib/pg_data
     healthcheck:
@@ -26,6 +28,7 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:password@zecret-db.flycast:5432/postgres
       - API_DATABASE_URL=postgres://api:password@zecret-db.flycast:5432/postgres
+      - BOSS_DATABASE_URL=postgres://boss:password@zecret-db.flycast:5432/postgres
     volumes:
       - ./services/migrations/migrations:/usr/src/app/migrations
       - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
@@ -45,6 +48,25 @@ services:
       - $PWD/services/server:$PWD/services/server
     environment:
       API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
+      BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
+    # keeps esbuild watch running
+    tty: true
+    # exit node from SIGINT
+    init: true
+    networks:
+      - zecret-app
+    
+  zec-app-mail:
+    hostname: zecret-api.flycast
+    build: ./services/mail
+    working_dir: $PWD/services/mail
+    user: node
+    volumes:
+      - $PWD/services/mail:$PWD/services/mail
+    environment:
+      BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
+    env_file:
+      - ./services/api/.env
     # keeps esbuild watch running
     tty: true
     # exit node from SIGINT

@@ -24,13 +24,14 @@ services:
     build:
       context: ./services/migrations
       target: dev
+    working_dir: $PWD/services/migrations
+    user: node
+    volumes:
+      - $PWD/services/migrations:$PWD/services/migrations
     environment:
       - DATABASE_URL=postgres://postgres:password@zecret-db.flycast:5432/postgres
       - API_DATABASE_URL=postgres://api:password@zecret-db.flycast:5432/postgres
-    volumes:
-      - ./services/migrations/migrations:/usr/src/app/migrations
-      - $HOME/src/harth/pgmg:/usr/src/app/node_modules/pgmg
-
+      - BOSS_DATABASE_URL=postgres://boss:password@zecret-db.flycast:5432/postgres
     depends_on:
       zec-tst-db:
         condition: service_healthy
@@ -47,6 +48,11 @@ services:
       - $PWD/services/server:$PWD/services/server
     environment:
       API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
+      BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
+      ZECRET_API_TOKEN_SECRET: secret
+      BASE_URL: http://localhost:8080/api/
+    env_file:
+      - ./services/server/.env
     # keeps esbuild watch running
     tty: true
     # exit node from SIGINT
@@ -62,7 +68,9 @@ services:
       - $PWD/services/tests:$PWD/services/tests
     environment:
       TEST_DATABASE_URL: postgres://postgres:password@zecret-db.flycast:5432/postgres
+      BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
       ZECRET_API_URL: http://zecret-api.flycast:8080/api
+      ZECRET_API_TOKEN_SECRET: secret
     # keeps esbuild watch running
     tty: true
     # exit node from SIGINT

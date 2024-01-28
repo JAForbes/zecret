@@ -1,0 +1,23 @@
+{
+  "name": "migrations",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pg-boss": "^9.0.3",
+    "pgmg": "github:JAForbes/pgmg#47ac762d412bd466ef5e618052ad1e5a06aa3ac2",
+    "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "eslint": "^8.56.0"
+  }
+}

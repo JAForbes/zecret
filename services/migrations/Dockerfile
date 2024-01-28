@@ -4,22 +4,15 @@ WORKDIR /usr/src/app
 
 RUN apk add inotify-tools
 
-RUN echo '{ "type": "module" }' > 'package.json'
-
-# https://github.com/JAForbes/pgmg/commit/e77436e6b93b39f0a4367db2352c29e3076c813d
-RUN npm install JAForbes/pgmg#e77436e6b93b39f0a4367db2352c29e3076c813d
-
 FROM base as dev
 
-RUN npm install tsx
+HEALTHCHECK --interval=30s --timeout=5s --retries=1000 CMD stat health-check.txt
 
-HEALTHCHECK --interval=5s --timeout=1s CMD stat health-check.txt
-
-CMD npx tsx --watch node_modules/.bin/pgmg $DATABASE_URL ./migrations/* --dev --health-check-file ./health-check.txt
+CMD npm install && npx tsx --watch node_modules/.bin/pgmg $DATABASE_URL ./migrations/* --dev --health-check-file ./health-check.txt
 
 FROM base as prod
 
-CMD ["sh", "-c", "npx pgmg \"$DATABASE_URL\" migrations/*.js"]
+CMD npm install && npx pgmg $DATABASE_URL migrations/* --prod 
 
 FROM busybox as default
 
