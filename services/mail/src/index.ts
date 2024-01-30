@@ -10,13 +10,16 @@ const boss = new PgBoss(process.env.BOSS_DATABASE_URL)
 
 await boss.start()
 
-await boss.work('email', async function sendEmail(postmarkData) {
-	await fetch('https://api.postmarkapp.com/email', {
-		headers: {
-			'X-Postmark-Server-Token': apiToken,
-			'Content-Type': 'application/json',
-			Accept: 'application/json'
-		},
-		body: JSON.stringify(postmarkData)
-	})
-})
+await boss.work<{ postmarkRequest: any; magicLink: string }>(
+	'email',
+	async function sendEmail({ data: postmarkRequest }) {
+		await fetch('https://api.postmarkapp.com/email', {
+			headers: {
+				'X-Postmark-Server-Token': apiToken,
+				'Content-Type': 'application/json',
+				Accept: 'application/json'
+			},
+			body: JSON.stringify(postmarkRequest)
+		})
+	}
+)

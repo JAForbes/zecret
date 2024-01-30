@@ -9,9 +9,10 @@ assert(process.env.API_DATABASE_URL)
 assert(process.env.ZECRET_API_TOKEN_SECRET)
 assert(process.env.POSTMARK_API_URL)
 assert(process.env.BOSS_DATABASE_URL)
-assert(process.env.BASE_URL)
+assert(process.env.ZECRET_BASE_URL)
 
-const { POSTMARK_API_URL, BASE_URL, ZECRET_API_TOKEN_SECRET } = process.env
+const { POSTMARK_API_URL, ZECRET_BASE_URL, ZECRET_API_TOKEN_SECRET } =
+	process.env
 
 const app = Fastify({ logger: true })
 const sql = postgres(process.env.API_DATABASE_URL)
@@ -37,56 +38,65 @@ app.post<{
 		}
 		const {
 			username: fromUser,
-			password: apiToken,
 			hostname: fromHost,
 			pathname
 		} = new URL(POSTMARK_API_URL)
 		const messageStream = pathname.slice(1)
-		const magicToken = jwt.sign(
+		const token = jwt.sign(
 			{
 				signup: true,
 				sub: req.body.email,
 				user_id: req.body.user_id
 			},
-			ZECRET_API_TOKEN_SECRET
+			ZECRET_API_TOKEN_SECRET,
+			{
+				expiresIn: '7 days'
+			}
 		)
-		const magicLink = new URL(BASE_URL)
-		magicLink.pathname = `/api/users/verify/${magicToken}`
+		const magicLink = new URL(ZECRET_BASE_URL)
+		magicLink.pathname = `/api/users/verify`
+		magicLink.searchParams.set('token', token)
 
 		await boss.send('email', {
-			From: `${fromUser}@${fromHost}`,
-			To: req.body.email,
-			Subject: 'Welcome to Zecret',
-			TextBody: dedent`
-					Hi ${req.body.user_id},
-
-					Thank you for signing up for Zecret.
-
-					Please click this link to confirm you are a real person.
-
-					${magicLink}
-
-					If you did not create this account simply ignore this email
-					no account has actually been created until this link is clicked.
-
-					You can reply to this email if you'd like to ask any questions.
-
-					Thanks!
-
-					James (and the Zecret team)
-				`,
-			MessageStream: messageStream
+			magicLink,
+			postmarkRequest: {
+				From: `${fromUser}@${fromHost}`,
+				To: req.body.email,
+				Subject: 'Welcome to Zecret',
+				TextBody: dedent`
+						Hi ${req.body.user_id},
+	
+						Thank you for signing up for Zecret.
+	
+						Please click this link to confirm you are a real person.
+	
+						${magicLink}
+	
+						If you did not create this account simply ignore this email
+						no account has actually been created until this link is clicked.
+	
+						You can reply to this email if you'd like to ask any questions.
+	
+						Thanks!
+	
+						James (and the Zecret team)
+					`,
+				MessageStream: messageStream
+			}
 		})
 	}
-	return { message: 'yay' }
+	return { message: 'job-created' }
 })
 
 app.get<{
-	Params: { token: string }
-}>('/api/users/verify/:token', async (req, res) => {
+	Querystring: { token: string }
+}>('/api/users/verify', async (req, res) => {
 	let decoded: { sub: string; user_id: string }
 	try {
-		decoded = jwt.verify(req.params.token, process.env.ZECRET_API_TOKEN_SECRET)
+		decoded = jwt.verify(
+			req.query.token,
+			process.env.ZECRET_API_TOKEN_SECRET!
+		) as typeof decoded
 	} catch (e) {
 		return res.redirect(
 			Object.assign(new URL('error', process.env.ZECRET_BASE_URL + '/'), {
@@ -101,7 +111,11 @@ app.get<{
 		})}
 		on conflict do nothing
 	`
-	return { message: 'OK' }
+	return res.redirect(
+		Object.assign(new URL('success', process.env.ZECRET_BASE_URL + '/'), {
+			search: new URLSearchParams({ reason: 'user-account-created' })
+		}) + ''
+	)
 })
 
 app.delete<{
@@ -117,7 +131,10 @@ app.delete<{
 
 	let decoded: { admin: boolean; sub?: string }
 	try {
-		decoded = jwt.verify(token, process.env.ZECRET_API_TOKEN_SECRET)
+		decoded = jwt.verify(
+			token,
+			process.env.ZECRET_API_TOKEN_SECRET!
+		) as typeof decoded
 	} catch (e) {
 		return res.status(403).send({ message: 'A valid bearer token is required' })
 	}
@@ -132,6 +149,12 @@ app.delete<{
 	return res
 		.status(403)
 		.send({ message: 'Not authorized to perform this action' })
+})
+
+app.get('/health', { logLevel: 'warn' }, () => {
+	return {
+		message: 'healthy'
+	}
 })
 
 const start = async () => {

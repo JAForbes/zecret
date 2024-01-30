@@ -50,7 +50,7 @@ services:
       API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
       BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
       ZECRET_API_TOKEN_SECRET: secret
-      BASE_URL: http://localhost:8080/api/
+      ZECRET_BASE_URL: http://localhost:8080
     env_file:
       - ./services/server/.env
     # keeps esbuild watch running
@@ -59,6 +59,10 @@ services:
     init: true
     networks:
       - zecret-tst
+
+    depends_on:
+      zec-tst-mg: 
+        condition: service_healthy
 
   zec-tst-tst:
     build: ./services/tests
@@ -79,7 +83,7 @@ services:
       - zecret-tst
 
     depends_on:
-      zec-tst-mg: 
+      zec-tst-api: 
         condition: service_healthy
 
 networks:
