@@ -40,7 +40,7 @@ test.before(async () => {
 			Authorization: `Bearer ${SUPERUSER_TOKEN}`
 		},
 		body: JSON.stringify({
-			email: 'james@harth.io'
+			email: 'james@example.com'
 		})
 	})
 
@@ -65,7 +65,7 @@ test('sign-up', async (t) => {
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify({
-			email: 'james@harth.io',
+			email: 'james@example.com',
 			user_id: 'jmsfbs'
 		})
 	})
@@ -99,7 +99,7 @@ test('sign-up', async (t) => {
 			const sql = superSQL
 			const [user] = await sql`
 				select * from zecret.user
-				where email = 'james@harth.io';
+				where email = 'james@example.com';
 			`
 			assert(user == null)
 		}
@@ -117,7 +117,7 @@ test('sign-up', async (t) => {
 		const sql = superSQL
 		const [user] = await sql`
 			select * from zecret.user
-			where email = 'james@harth.io';
+			where email = 'james@example.com';
 		`
 		assert(user)
 	}

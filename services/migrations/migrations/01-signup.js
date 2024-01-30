@@ -1,4 +1,4 @@
-export const name = 'Initial Schema'
+export const name = 'Signup'
 
 export const teardown = async (sql) => {
 	for (let [url] of [

@@ -151,6 +151,10 @@ app.delete<{
 		.send({ message: 'Not authorized to perform this action' })
 })
 
+app.delete<{ Body: { org: string } }>('/api/orgs', async (req, res) => {
+	return res.status(500)
+})
+
 app.get('/health', { logLevel: 'warn' }, () => {
 	return {
 		message: 'healthy'
@@ -170,10 +174,14 @@ const start = async () => {
 			SIGINT: 2,
 			SIGTERM: 15
 		}).forEach((signal) => {
-			process.on(signal, () => {
-				app.close(() => {
-					process.exit(128)
-				})
+			process.on(signal, async () => {
+				await Promise.all([
+					sql.end(),
+					boss.stop(),
+					app.close(() => {
+						process.exit(128)
+					})
+				])
 			})
 		})
 	} catch (err) {
