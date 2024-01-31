@@ -26,7 +26,7 @@ const superSQL = await postgres(process.env.TEST_DATABASE_URL, {
 
 const SUPERUSER_TOKEN = jwt.sign(
 	{
-		sub: 'admin@zecret.fly.dev',
+		sub: 'admin@zecret.local',
 		admin: true
 	},
 	process.env.ZECRET_API_TOKEN_SECRET

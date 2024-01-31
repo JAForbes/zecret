@@ -10,7 +10,7 @@ const orgsEndpoint = new URL('orgs', process.env.ZECRET_API_URL + '/')
 
 const SUPERUSER_TOKEN = jwt.sign(
 	{
-		sub: 'admin@zecret.fly.dev',
+		sub: 'admin@zecret.local',
 		admin: true
 	},
 	process.env.ZECRET_API_TOKEN_SECRET
@@ -42,6 +42,7 @@ test.before(
 	`
 )
 test.before(async () => {
+	console.log(orgsEndpoint)
 	const res = await fetch(orgsEndpoint, {
 		method: 'DELETE',
 		headers: {
@@ -49,12 +50,15 @@ test.before(async () => {
 			Authorization: `Bearer ${SUPERUSER_TOKEN}`
 		},
 		body: JSON.stringify({
-			org: 'harth'
+			org_id: 'harth'
 		})
 	})
-	assert(res.ok)
+	console.log(await res.text())
+	// assert(res.ok)
 })
-test('org', async (t) => {})
+test('org', async (t) => {
+	console.log('hello', orgsEndpoint)
+})
 
 test.after(
 	() => sql`

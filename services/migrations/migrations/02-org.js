@@ -47,7 +47,7 @@ async function triggerMultiple(sql, _prefix, options) {
 	}
 }
 
-export const action = async (sql) => {
+export const action = async (sql, { roles }) => {
 	await sql`
 		create table zecret.org(
 			org_id public.citext primary key,
@@ -76,4 +76,14 @@ export const action = async (sql) => {
 			`
 		}
 	})
+
+	await sql`
+		grant select, insert, update, delete on zecret.org to ${sql(roles.service)}
+	`
+
+	await sql`
+		grant ${sql(roles.service)} to ${sql(
+		new URL(process.env.API_DATABASE_URL).username
+	)}
+	`
 }

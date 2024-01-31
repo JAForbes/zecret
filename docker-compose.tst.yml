@@ -39,6 +39,19 @@ services:
     networks:
       - zecret-tst
 
+  zec-tst-gw:
+    hostname: zecret.local
+    image: caddy:2.7.6-alpine
+    ports:
+      - 8080:8080
+    command: caddy run --config /etc/caddy/Caddyfile --watch
+    volumes:
+      - ./services/gateway/Caddyfile:/etc/caddy/Caddyfile
+    environment:
+      - ZECRET_DOMAIN=zecret.local
+    networks:
+      - zecret-tst
+
   zec-tst-api:
     hostname: zecret-api.flycast
     build: ./services/server
@@ -50,15 +63,18 @@ services:
       API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
       BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
       ZECRET_API_TOKEN_SECRET: secret
-      ZECRET_BASE_URL: http://localhost:8080
+      ZECRET_BASE_URL: http://zecret.local:8080
     env_file:
       - ./services/server/.env
     # keeps esbuild watch running
     tty: true
     # exit node from SIGINT
     init: true
+    stop_signal: SIGTERM
     networks:
       - zecret-tst
+
+    restart: always
 
     depends_on:
       zec-tst-mg: 
@@ -74,7 +90,7 @@ services:
       TEST_DATABASE_URL: postgres://postgres:password@zecret-db.flycast:5432/postgres
       BOSS_DATABASE_URL: postgres://boss:password@zecret-db.flycast:5432/postgres
       API_DATABASE_URL: postgres://api:password@zecret-db.flycast:5432/postgres
-      ZECRET_API_URL: http://zecret-api.flycast:8080/api
+      ZECRET_API_URL: http://zecret.local:8080/api
       ZECRET_API_TOKEN_SECRET: secret
     # keeps esbuild watch running
     tty: true

@@ -5,7 +5,7 @@
   "module": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "NODE_OPTIONS='--import tsx' node --watch src/index.ts"
+    "dev": "NODE_OPTIONS='--import tsx' node --watch-preserve-output --watch src/index.ts"
   },
   "keywords": [],
   "author": "",

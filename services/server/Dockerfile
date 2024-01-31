@@ -13,7 +13,7 @@ RUN apk update && \
 	apk add --no-cache \
 	openssh-keygen
 
-HEALTHCHECK --interval=5s --timeout=3s \
+HEALTHCHECK --interval=1s --timeout=1s \
 	CMD curl http://localhost:8080/health
 
-CMD bash -c 'npm install && npm run dev'
+CMD NODE_OPTIONS='--import tsx' node --watch --watch-preserve-output src/index.ts

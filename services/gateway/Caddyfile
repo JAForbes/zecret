@@ -1,0 +1,89 @@
+(verify-auth) {
+	reverse_proxy zecret-api.flycast:8080 {
+		# Always GET, so that the incoming
+		# request's body is not consumed
+		method GET
+
+		# Change the URI to the auth gateway's
+		# verification endpoint
+		rewrite /auth/verify
+
+		# Forward the original method and URI,
+		# since they get rewritten above; this
+		# is in addition to other X-Forwarded-*
+		# headers already set by reverse_proxy
+		header_up X-Forwarded-Method {method}
+		header_up X-Forwarded-Uri {uri}
+
+		# On a successful response, copy response headers
+		@good status 2xx
+		handle_response @good {
+			request_header +X-Email {rp.header.X-Email}
+			request_header +X-User-Id {rp.header.X-User-Id}
+			request_header +X-Admin {rp.header.X-Admin}
+		}
+	}
+
+}
+
+(unauthed-endpoints) {
+	
+	@createUser {
+		method POST 
+		path /api/users
+	}
+
+	@verifyUser {
+		method GET
+		path /api/users/verify
+	}
+
+	@health {
+		method GET
+		path /api/health
+	}
+
+	handle @health {
+		uri strip_prefix /api		
+		reverse_proxy zecret-api.flycast:8080
+	}
+	handle @createUser {
+		uri strip_prefix /api
+		reverse_proxy zecret-api.flycast:8080
+	}
+	handle @verifyUser {
+		uri strip_prefix /api
+		reverse_proxy zecret-api.flycast:8080
+	}
+
+}
+
+{
+  auto_https off
+  servers {
+    trusted_proxies static private_ranges
+  }
+  log {
+    level INFO
+    format console
+    output stderr
+  }
+}
+
+
+http://{$ZECRET_DOMAIN}:8080 {
+
+	import unauthed-endpoints
+
+	handle_path /api* {
+		import verify-auth
+		reverse_proxy zecret-api.flycast:8080
+	}
+
+	handle_path /james {
+		respond "Hello world"
+	}
+
+	reverse_proxy zecret-ui.flycast:8080
+}
+

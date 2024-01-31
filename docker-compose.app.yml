@@ -39,6 +39,19 @@ services:
     networks:
       - zecret-app
 
+  zec-tst-gw:
+    hostname: zecret.local
+    image: caddy:2.7.6-alpine
+    ports:
+      - 8080:8080
+    command: caddy run --config /etc/caddy/Caddyfile --watch
+    volumes:
+      - ./services/gateway/Caddyfile:/etc/caddy/Caddyfile
+    environment:
+      - ZECRET_DOMAIN=zecret.local
+    networks:
+      - zecret-tst
+
   zec-app-api:
     hostname: zecret-api.flycast
     build: ./services/server

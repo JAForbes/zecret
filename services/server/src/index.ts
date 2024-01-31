@@ -18,9 +18,32 @@ const app = Fastify({ logger: true })
 const sql = postgres(process.env.API_DATABASE_URL)
 const boss = new PgBoss(process.env.BOSS_DATABASE_URL)
 
+app.get('/auth/verify', (req, res) => {
+	let [, token] = req.headers.authorization?.split('Bearer ') ?? []
+
+	if (!token) {
+		return res.status(403).send({ message: 'A valid bearer token is required' })
+	}
+
+	let decoded: { admin?: boolean; sub?: string; user_id?: string }
+	try {
+		decoded = jwt.verify(
+			token,
+			process.env.ZECRET_API_TOKEN_SECRET!
+		) as typeof decoded
+
+		res.header('x-email', decoded.sub ?? '')
+		res.header('x-admin', decoded.admin ?? 'false')
+		res.header('x-user-id', decoded.user_id ?? '')
+		return res.status(200).send({})
+	} catch (e) {
+		return res.status(403).send({ message: 'A valid bearer token is required' })
+	}
+})
+
 app.post<{
 	Body: { email: string; user_id: string }
-}>('/api/users', async (req, res) => {
+}>('/users', async (req, res) => {
 	if (!(req.body.email && req.body.user_id)) {
 		return res
 			.status(400)
@@ -90,7 +113,7 @@ app.post<{
 
 app.get<{
 	Querystring: { token: string }
-}>('/api/users/verify', async (req, res) => {
+}>('/users/verify', async (req, res) => {
 	let decoded: { sub: string; user_id: string }
 	try {
 		decoded = jwt.verify(
@@ -120,26 +143,20 @@ app.get<{
 
 app.delete<{
 	Body: { email: string }
-}>('/api/users', async (req, res) => {
-	if (!req.body.email) {
+	Headers: {
+		'x-email': string
+		'x-user-id': string
+		'x-admin'?: 'true' | 'false'
+	}
+}>('/users', async (req, res) => {
+	if (!req.body || !req.body.email) {
 		return res.status(400).send({ message: 'Expected: { email: string }' })
 	}
-	const [, token] = req.headers.authorization?.split('Bearer ') ?? []
-	if (!token) {
-		return res.status(403).send({ message: 'A valid bearer token is required' })
-	}
 
-	let decoded: { admin: boolean; sub?: string }
-	try {
-		decoded = jwt.verify(
-			token,
-			process.env.ZECRET_API_TOKEN_SECRET!
-		) as typeof decoded
-	} catch (e) {
-		return res.status(403).send({ message: 'A valid bearer token is required' })
-	}
-
-	if (decoded.admin || req.body.email === decoded.sub) {
+	if (
+		req.headers['x-admin'] == 'true' ||
+		req.body.email === req.headers['x-email']
+	) {
 		await sql`
 			delete from zecret.user
 			where email = ${req.body.email}
@@ -151,8 +168,26 @@ app.delete<{
 		.send({ message: 'Not authorized to perform this action' })
 })
 
-app.delete<{ Body: { org: string } }>('/api/orgs', async (req, res) => {
-	return res.status(500)
+app.delete<{
+	Body: { org_id: string }
+	Headers: {
+		'x-email': string
+		'x-user-id': string
+		'x-admin'?: 'true' | 'false'
+	}
+}>('/orgs', async (req, res) => {
+	await sql`
+		delete from zecret.org
+		where org_id = ${req.body.org_id}
+		and (${req.headers['x-admin'] == 'true'} or
+			primary_owner = (
+				select user_id from zecret.user
+				where email = ${req.headers['x-email']}
+			)
+		)
+	`
+
+	return { message: 'OK' }
 })
 
 app.get('/health', { logLevel: 'warn' }, () => {
@@ -174,14 +209,9 @@ const start = async () => {
 			SIGINT: 2,
 			SIGTERM: 15
 		}).forEach((signal) => {
-			process.on(signal, async () => {
-				await Promise.all([
-					sql.end(),
-					boss.stop(),
-					app.close(() => {
-						process.exit(128)
-					})
-				])
+			process.on(signal, () => {
+				console.log('SIGNAL', signal)
+				process.exit(128)
 			})
 		})
 	} catch (err) {
