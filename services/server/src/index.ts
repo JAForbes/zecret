@@ -1,5 +1,5 @@
-import Fastify from 'fastify'
-import postgres from 'postgres'
+import Fastify, { FastifyRequest } from 'fastify'
+import postgres, { Row, TransactionSql } from 'postgres'
 import assert from 'node:assert'
 import jwt from 'jsonwebtoken'
 import dedent from 'dedent-js'
@@ -25,7 +25,7 @@ app.get('/auth/verify', (req, res) => {
 		return res.status(403).send({ message: 'A valid bearer token is required' })
 	}
 
-	let decoded: { admin?: boolean; sub?: string; user_id?: string }
+	let decoded: { superuser?: boolean; sub?: string; user_id?: string }
 	try {
 		decoded = jwt.verify(
 			token,
@@ -33,7 +33,7 @@ app.get('/auth/verify', (req, res) => {
 		) as typeof decoded
 
 		res.header('x-email', decoded.sub ?? '')
-		res.header('x-admin', decoded.admin ?? 'false')
+		res.header('x-superuser', decoded.superuser ?? 'false')
 		res.header('x-user-id', decoded.user_id ?? '')
 		return res.status(200).send({})
 	} catch (e) {
@@ -146,7 +146,7 @@ app.delete<{
 	Headers: {
 		'x-email': string
 		'x-user-id': string
-		'x-admin'?: 'true' | 'false'
+		'x-superuser'?: 'true' | 'false'
 	}
 }>('/users', async (req, res) => {
 	if (!req.body || !req.body.email) {
@@ -154,7 +154,7 @@ app.delete<{
 	}
 
 	if (
-		req.headers['x-admin'] == 'true' ||
+		req.headers['x-superuser'] == 'true' ||
 		req.body.email === req.headers['x-email']
 	) {
 		await sql`
@@ -168,24 +168,51 @@ app.delete<{
 		.send({ message: 'Not authorized to perform this action' })
 })
 
+const withRLS = <U extends Row[]>(
+	req: FastifyRequest<{
+		Headers: {
+			'x-email': string
+			'x-user-id': string
+			'x-superuser'?: 'true' | 'false'
+		}
+	}>,
+	cb: (s: TransactionSql) => Promise<U> | Promise<void>
+): ReturnType<typeof sql.begin> => {
+	const out = sql.begin(async (sql) => {
+		await sql`select 
+			set_config('zecret.email', ${req.headers['x-email']}, true),
+			set_config('zecret.user_id', ${req.headers['x-user-id']}, true),
+			set_config('zecret.superuser', ${req.headers['x-superuser'] ?? ''}, true),
+		`
+
+		return cb(sql)
+	})
+
+	return out
+}
+
+type AuthHeaders = {
+	'x-email': string
+	'x-user-id': string
+	'x-superuser'?: 'true' | 'false'
+}
+
 app.delete<{
 	Body: { org_id: string }
-	Headers: {
-		'x-email': string
-		'x-user-id': string
-		'x-admin'?: 'true' | 'false'
-	}
+	Headers: AuthHeaders
 }>('/orgs', async (req, res) => {
-	await sql`
-		delete from zecret.org
-		where org_id = ${req.body.org_id}
-		and (${req.headers['x-admin'] == 'true'} or
-			primary_owner = (
-				select user_id from zecret.user
-				where email = ${req.headers['x-email']}
+	await withRLS(req, async (sql) => {
+		await sql`
+			delete from zecret.org
+			where org_id = ${req.body.org_id}
+			and (${req.headers['x-superuser'] == 'true'} or
+				primary_owner = (
+					select user_id from zecret.user
+					where email = ${req.headers['x-email']}
+				)
 			)
-		)
-	`
+		`
+	})
 
 	return { message: 'OK' }
 })

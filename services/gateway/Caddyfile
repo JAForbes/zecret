@@ -20,7 +20,7 @@
 		handle_response @good {
 			request_header +X-Email {rp.header.X-Email}
 			request_header +X-User-Id {rp.header.X-User-Id}
-			request_header +X-Admin {rp.header.X-Admin}
+			request_header +X-Superuser {rp.header.X-Superuser}
 		}
 	}
 

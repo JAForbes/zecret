@@ -82,6 +82,80 @@ export const action = async (sql, { roles }) => {
 	`
 
 	await sql`
+		alter table zecret.org
+		enable row level security
+	`
+
+	await sql`
+		create function zecret.is_superuser()
+		returns boolean
+		as $$
+			select current_setting('zecret.superuser', true) = 'true'::text
+		$$
+		language sql
+		set search_path = ''
+		security invoker
+		stable
+	`
+	await sql`
+		create function zecret.get_user_id()
+		returns public.citext
+		as $$
+			select current_setting('zecret.user_id', true)::public.citext
+		$$
+		language sql
+		set search_path = ''
+		security invoker
+		stable
+	`
+	await sql`
+		create function zecret.does_user_own_org(_org zecret.org, _user_id public.citext)
+		returns boolean
+		as $$
+			select _org.primary_owner = _user_id
+		$$
+		language sql
+		set search_path = ''
+		security invoker
+		stable
+	`
+	await sql`
+		create function zecret.is_user_member_of_org(_org zecret.org, _user_id public.citext)
+		returns boolean
+		as $$
+			-- todo-james implement groups
+			select false
+		$$
+		language sql
+		set search_path = ''
+		security invoker
+		stable
+	`
+
+	for (let [policy_name, operation] of [
+		['read', 'select'],
+		['modify', 'update']
+	]) {
+		await sql`
+			create policy ${sql.unsafe(policy_name)} on zecret.org 
+			for ${sql.unsafe(operation)} 
+			to ${sql(roles.service)}
+			using (
+				zecret.does_user_own_org(org, zecret.get_user_id())
+				or zecret.is_user_member_of_org(org, zecret.get_user_id())
+				or zecret.is_superuser()
+			)
+		`
+	}
+
+	await sql`
+		create policy add on zecret.org
+		for insert
+		to ${sql(roles.service)}
+		with check (true)
+	`
+
+	await sql`
 		grant ${sql(roles.service)} to ${sql(
 		new URL(process.env.API_DATABASE_URL).username
 	)}

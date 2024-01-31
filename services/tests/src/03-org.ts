@@ -10,8 +10,8 @@ const orgsEndpoint = new URL('orgs', process.env.ZECRET_API_URL + '/')
 
 const SUPERUSER_TOKEN = jwt.sign(
 	{
-		sub: 'admin@zecret.local',
-		admin: true
+		sub: 'superuser@zecret.local',
+		superuser: true
 	},
 	process.env.ZECRET_API_TOKEN_SECRET
 )
@@ -56,9 +56,7 @@ test.before(async () => {
 	console.log(await res.text())
 	// assert(res.ok)
 })
-test('org', async (t) => {
-	console.log('hello', orgsEndpoint)
-})
+test('org', async (t) => {})
 
 test.after(
 	() => sql`

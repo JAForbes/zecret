@@ -8,7 +8,7 @@ FROM base as dev
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=1000 CMD stat health-check.txt
 
-CMD npm install && (rm /tmp/tsx-1000/29.pipe || true) && npx tsx --watch-preserve-output --watch node_modules/.bin/pgmg $DATABASE_URL ./migrations/* --dev --health-check-file ./health-check.txt
+CMD npm install && (rm /tmp/tsx-1000/*.pipe || true) && npx tsx --watch-preserve-output --watch node_modules/.bin/pgmg $DATABASE_URL ./migrations/* --dev --health-check-file ./health-check.txt
 
 FROM base as prod
 
