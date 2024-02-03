@@ -132,28 +132,62 @@ export const action = async (sql, { roles }) => {
 		stable
 	`
 
-	for (let [policy_name, operation] of [
-		['read', 'select'],
-		['modify', 'update']
-	]) {
-		await sql`
-			create policy ${sql.unsafe(policy_name)} on zecret.org 
-			for ${sql.unsafe(operation)} 
-			to ${sql(roles.service)}
-			using (
-				zecret.does_user_own_org(org, zecret.get_user_id())
-				or zecret.is_user_member_of_org(org, zecret.get_user_id())
-				or zecret.is_superuser()
-			)
-		`
+	async function policy(config) {
+		const prefix =
+			config.name ?? `${config.for.join('_and_')}_to_${config.to ?? 'all'}_`
+		for (let operation of config.for) {
+			await sql`
+				create policy ${sql.unsafe(`${prefix}_${operation}`)} on ${config.on}
+				for ${sql.unsafe(operation)} 
+				to ${sql(roles.service)}
+				${config.using ? sql`using (${config.using})` : sql.unsafe``}
+				${config.check ? sql`with check (${config.check})` : sql.unsafe``}
+			`
+		}
 	}
 
-	await sql`
-		create policy add on zecret.org
-		for insert
-		to ${sql(roles.service)}
-		with check (true)
-	`
+	await policy({
+		on: `zecret.org`,
+		for: ['select', 'update'],
+		to: roles.service,
+		using: sql`
+			zecret.does_user_own_org(org, zecret.get_user_id())
+			or zecret.is_user_member_of_org(org, zecret.get_user_id())
+			or zecret.is_superuser()
+		`
+	})
+
+	await policy({
+		on: `zecret.org`,
+		for: ['insert'],
+		to: roles.service,
+		check: sql`
+			true
+		`
+	})
+
+	// for (let [policy_name, operation] of [
+	// 	['read', 'select'],
+	// 	['modify', 'update']
+	// ]) {
+	// 	await sql`
+	// 		create policy ${sql.unsafe(policy_name)} on zecret.org
+	// 		for ${sql.unsafe(operation)}
+	// 		to ${sql(roles.service)}
+	// 		using (
+	// 			zecret.does_user_own_org(org, zecret.get_user_id())
+	// 			or zecret.is_user_member_of_org(org, zecret.get_user_id())
+	// 			or zecret.is_superuser()
+	// 		)
+	// 	`
+	// }
+
+	// await sql`
+	// 	create policy add on zecret.org
+	// 	for insert
+	// 	to ${sql(roles.service)}
+	// 	with check (true)
+	// `
 
 	await sql`
 		grant ${sql(roles.service)} to ${sql(
